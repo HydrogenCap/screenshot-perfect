@@ -1,18 +1,134 @@
 import { useState } from "react";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { mockAccounts, accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Constants } from "@/integrations/supabase/types";
+
+const accountTypes = Constants.public.Enums.account_type;
+const providerTypes = Constants.public.Enums.provider_type;
 
 export default function Accounts() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const filtered = mockAccounts.filter(
-    (a) =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.provider.toLowerCase().includes(search.toLowerCase())
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Form state
+  const [providerName, setProviderName] = useState("");
+  const [providerType, setProviderType] = useState<string>("investment_platform");
+  const [accountName, setAccountName] = useState("");
+  const [accountType, setAccountType] = useState<string>("");
+
+  // Fetch accounts with provider info
+  const { data: accounts = [], isLoading } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("*, providers(name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Fetch existing providers
+  const { data: providers = [] } = useQuery({
+    queryKey: ["providers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("providers")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("new");
+
+  const addAccountMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+
+      let providerId = selectedProviderId;
+
+      // Create provider if new
+      if (selectedProviderId === "new") {
+        if (!providerName.trim()) throw new Error("Provider name is required");
+        const { data: prov, error: provErr } = await supabase
+          .from("providers")
+          .insert({
+            name: providerName.trim(),
+            provider_type: providerType as any,
+            user_id: user.id,
+          })
+          .select()
+          .single();
+        if (provErr) throw provErr;
+        providerId = prov.id;
+      }
+
+      if (!accountName.trim()) throw new Error("Account name is required");
+      if (!accountType) throw new Error("Account type is required");
+
+      const { error } = await supabase.from("accounts").insert({
+        account_name: accountName.trim(),
+        account_type: accountType as any,
+        provider_id: providerId,
+        user_id: user.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      toast.success("Account added");
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to add account");
+    },
+  });
+
+  const resetForm = () => {
+    setDialogOpen(false);
+    setProviderName("");
+    setProviderType("investment_platform");
+    setAccountName("");
+    setAccountType("");
+    setSelectedProviderId("new");
+  };
+
+  const filtered = accounts.filter(
+    (a: any) =>
+      a.account_name.toLowerCase().includes(search.toLowerCase()) ||
+      (a.providers?.name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -21,10 +137,11 @@ export default function Accounts() {
         <div>
           <h1 className="text-2xl font-bold">Accounts</h1>
           <p className="text-sm text-muted-foreground">
-            {mockAccounts.length} accounts across {new Set(mockAccounts.map((a) => a.provider)).size} providers
+            {accounts.length} account{accounts.length !== 1 ? "s" : ""}{" "}
+            across {new Set(accounts.map((a: any) => a.provider_id)).size} provider{new Set(accounts.map((a: any) => a.provider_id)).size !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Add Account
         </Button>
@@ -52,44 +169,35 @@ export default function Accounts() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Provider</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Account Name</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Import</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Value</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cash</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Invested</th>
                 <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((account, i) => (
+              {filtered.length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                    No accounts yet. Click "Add Account" to get started.
+                  </td>
+                </tr>
+              )}
+              {filtered.map((account: any, i: number) => (
                 <tr
                   key={account.id}
                   className="border-b last:border-0 transition-colors hover:bg-muted/30 cursor-pointer animate-fade-in"
                   style={{ animationDelay: `${i * 50}ms` }}
                 >
-                  <td className="px-4 py-3 font-medium">{account.provider}</td>
-                  <td className="px-4 py-3">{account.name}</td>
+                  <td className="px-4 py-3 font-medium">{account.providers?.name}</td>
+                  <td className="px-4 py-3">{account.account_name}</td>
                   <td className="px-4 py-3">
                     <Badge variant="secondary" className="text-[10px] font-medium">
-                      {accountTypeLabels[account.type] || account.type}
+                      {accountTypeLabels[account.account_type] || account.account_type}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {account.lastImport ? formatDate(account.lastImport) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-medium">
-                    {formatCurrency(account.value)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                    {formatCurrency(account.cash)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                    {formatCurrency(account.invested)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span
                       className={cn(
                         "inline-flex h-2 w-2 rounded-full",
-                        account.active ? "bg-gain" : "bg-muted-foreground"
+                        account.is_active ? "bg-gain" : "bg-muted-foreground"
                       )}
                     />
                   </td>
@@ -99,6 +207,98 @@ export default function Accounts() {
           </table>
         </div>
       </div>
+
+      {/* Add Account Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Provider selection */}
+            <div className="space-y-2">
+              <Label>Provider</Label>
+              <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">+ New Provider</SelectItem>
+                  {providers.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedProviderId === "new" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Provider Name</Label>
+                  <Input
+                    placeholder="e.g. Trading212"
+                    value={providerName}
+                    onChange={(e) => setProviderName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Provider Type</Label>
+                  <Select value={providerType} onValueChange={setProviderType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providerTypes.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            <div className="space-y-2">
+              <Label>Account Name</Label>
+              <Input
+                placeholder="e.g. ISA 2025/26"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Account Type</Label>
+              <Select value={accountType} onValueChange={setAccountType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accountTypes.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {accountTypeLabels[t] || t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetForm}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addAccountMutation.mutate()}
+              disabled={addAccountMutation.isPending}
+            >
+              {addAccountMutation.isPending ? "Adding…" : "Add Account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
