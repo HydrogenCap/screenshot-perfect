@@ -43,12 +43,13 @@ export default function Accounts() {
   const [accountType, setAccountType] = useState<string>("");
   const [selectedProviderId, setSelectedProviderId] = useState<string>("new");
 
-  // Add Valuation dialog state
+  // Add/Edit Valuation dialog state
   const [valDialogOpen, setValDialogOpen] = useState(false);
   const [valAccountId, setValAccountId] = useState<string>("");
   const [valAccountLabel, setValAccountLabel] = useState<string>("");
   const [valDate, setValDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [valTotal, setValTotal] = useState("");
+  const [valEditId, setValEditId] = useState<string | null>(null);
   const [valCash, setValCash] = useState("");
   const [valInvested, setValInvested] = useState("");
 
@@ -129,29 +130,40 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to add account"),
   });
 
-  const addValuationMutation = useMutation({
+  const saveValuationMutation = useMutation({
     mutationFn: async () => {
       if (!valAccountId) throw new Error("No account selected");
       const total = parseFloat(valTotal);
       const cash = parseFloat(valCash || "0");
       const invested = parseFloat(valInvested || "0");
       if (isNaN(total)) throw new Error("Total value is required");
-      const { error } = await supabase.from("valuations").insert({
-        account_id: valAccountId,
-        valuation_date: valDate,
-        total_value: total,
-        cash_balance: cash,
-        invested_value: invested,
-        source: "manual" as any,
-      });
-      if (error) throw error;
+
+      if (valEditId) {
+        const { error } = await supabase.from("valuations").update({
+          valuation_date: valDate,
+          total_value: total,
+          cash_balance: cash,
+          invested_value: invested,
+        }).eq("id", valEditId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("valuations").insert({
+          account_id: valAccountId,
+          valuation_date: valDate,
+          total_value: total,
+          cash_balance: cash,
+          invested_value: invested,
+          source: "manual" as any,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      toast.success("Valuation added");
+      toast.success(valEditId ? "Balance updated" : "Balance added");
       resetValForm();
     },
-    onError: (err: any) => toast.error(err.message || "Failed to add valuation"),
+    onError: (err: any) => toast.error(err.message || "Failed to save valuation"),
   });
 
   const resetAccountForm = () => {
@@ -171,15 +183,26 @@ export default function Accounts() {
     setValTotal("");
     setValCash("");
     setValInvested("");
+    setValEditId(null);
   };
 
   const openValDialog = (account: any) => {
+    const v = account.latestValuation;
     setValAccountId(account.id);
     setValAccountLabel(`${account.providers?.name} — ${account.account_name}`);
-    setValDate(new Date().toISOString().slice(0, 10));
-    setValTotal("");
-    setValCash("");
-    setValInvested("");
+    if (v) {
+      setValEditId(v.id);
+      setValDate(v.valuation_date);
+      setValTotal(String(v.total_value));
+      setValCash(String(v.cash_balance));
+      setValInvested(String(v.invested_value));
+    } else {
+      setValEditId(null);
+      setValDate(new Date().toISOString().slice(0, 10));
+      setValTotal("");
+      setValCash("");
+      setValInvested("");
+    }
     setValDialogOpen(true);
   };
 
@@ -265,7 +288,7 @@ export default function Accounts() {
                     <td className="px-4 py-3 text-center">
                       <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
                         <BarChart3 className="mr-1 h-3.5 w-3.5" />
-                        Add Balance
+                        {v ? "Edit Balance" : "Add Balance"}
                       </Button>
                     </td>
                   </tr>
@@ -368,8 +391,8 @@ export default function Accounts() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={resetValForm}>Cancel</Button>
-            <Button onClick={() => addValuationMutation.mutate()} disabled={addValuationMutation.isPending}>
-              {addValuationMutation.isPending ? "Saving…" : "Save Balance"}
+            <Button onClick={() => saveValuationMutation.mutate()} disabled={saveValuationMutation.isPending}>
+              {saveValuationMutation.isPending ? "Saving…" : valEditId ? "Update Balance" : "Save Balance"}
             </Button>
           </DialogFooter>
         </DialogContent>
