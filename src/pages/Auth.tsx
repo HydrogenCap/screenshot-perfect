@@ -69,8 +69,8 @@ export default function Auth() {
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold">PortfolioTracker</h1>
-            <p className="text-sm text-muted-foreground">
-              {isLogin ? "Sign in to your account" : "Create your account"}
+          <p className="text-sm text-muted-foreground">
+              {isForgot ? "Reset your password" : isLogin ? "Sign in to your account" : "Create your account"}
             </p>
           </div>
         </div>
