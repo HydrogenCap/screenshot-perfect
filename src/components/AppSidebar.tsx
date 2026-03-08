@@ -1,8 +1,10 @@
 import {
   LayoutDashboard,
   Wallet,
+  Receipt,
   Upload,
   BookOpen,
+  FileText,
   Settings,
   TrendingUp,
   PoundSterling,
@@ -20,12 +22,17 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { usePortfolioValue } from "@/hooks/usePortfolioValue";
+import { formatCurrency } from "@/lib/format";
 
 const mainNav = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Accounts", url: "/accounts", icon: Wallet },
+  { title: "Transactions", url: "/transactions", icon: Receipt },
   { title: "Import CSV", url: "/import", icon: Upload },
   { title: "Instruments", url: "/instruments", icon: BookOpen },
+  { title: "CGT Report", url: "/cgt-report", icon: FileText },
 ];
 
 const secondaryNav = [
@@ -33,6 +40,8 @@ const secondaryNav = [
 ];
 
 export function AppSidebar() {
+  const { data: portfolioValue, isLoading } = usePortfolioValue();
+
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="p-4 pb-6">
@@ -106,9 +115,13 @@ export function AppSidebar() {
           <TrendingUp className="h-4 w-4 text-gain" />
           <div className="flex flex-col">
             <span className="text-[11px] text-sidebar-muted">Portfolio</span>
-            <span className="text-sm font-semibold text-sidebar-foreground">
-              £87,432.56
-            </span>
+            {isLoading ? (
+              <Skeleton className="h-5 w-24 bg-sidebar-accent" />
+            ) : (
+              <span className="text-sm font-semibold text-sidebar-foreground">
+                {formatCurrency(portfolioValue || 0)}
+              </span>
+            )}
           </div>
         </div>
       </SidebarFooter>

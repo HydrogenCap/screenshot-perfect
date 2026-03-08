@@ -478,6 +478,36 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          created_at: string
+          id: string
+          isa_warning: boolean
+          tax_year_reminder: boolean
+          updated_at: string
+          user_id: string
+          weekly_summary_email: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          isa_warning?: boolean
+          tax_year_reminder?: boolean
+          updated_at?: string
+          user_id: string
+          weekly_summary_email?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          isa_warning?: boolean
+          tax_year_reminder?: boolean
+          updated_at?: string
+          user_id?: string
+          weekly_summary_email?: boolean
+        }
+        Relationships: []
+      }
       valuations: {
         Row: {
           account_id: string
