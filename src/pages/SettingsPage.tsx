@@ -78,10 +78,26 @@ export default function SettingsPage() {
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase
+      
+      // Check if profile exists
+      const { data: existing } = await supabase
         .from("profiles")
-        .upsert({ user_id: user.id, display_name: displayName.trim() || null }, { onConflict: "user_id" });
-      if (error) throw error;
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (existing) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ display_name: displayName.trim() || null })
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("profiles")
+          .insert({ user_id: user.id, display_name: displayName.trim() || null });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
