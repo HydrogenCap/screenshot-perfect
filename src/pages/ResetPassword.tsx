@@ -12,47 +12,87 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Listen for the PASSWORD_RECOVERY event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
-      }
-      // Also treat SIGNED_IN with a session as ready (recovery token was already exchanged)
-      if (event === "SIGNED_IN" && session) {
-        setReady(true);
-      }
-    });
+    let mounted = true;
 
-    // Check if there's already a session (recovery token was processed before mount)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setReady(true);
-      }
-    });
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const queryParams = new URLSearchParams(window.location.search);
 
-    // Also check hash for recovery type
-    const hash = window.location.hash;
-    if (hash.includes("type=recovery")) {
+    const hasRecoveryHint =
+      hashParams.get("type") === "recovery" ||
+      queryParams.get("type") === "recovery" ||
+      hashParams.has("access_token") ||
+      queryParams.has("code") ||
+      queryParams.has("token_hash");
+
+    const markReady = () => {
+      if (!mounted) return;
+      setLinkError(null);
       setReady(true);
-    }
+    };
 
-    return () => subscription.unsubscribe();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        markReady();
+      }
+      if (event === "SIGNED_IN" && session) {
+        markReady();
+      }
+    });
+
+    const initializeRecovery = async () => {
+      // PKCE-style recovery links provide a `code` query parameter.
+      const code = queryParams.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          markReady();
+          return;
+        }
+      }
+
+      // Implicit/session-restored flow.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session || hasRecoveryHint) {
+        markReady();
+        return;
+      }
+
+      if (mounted) {
+        setLinkError("This recovery link is invalid or expired. Please request a new one.");
+      }
+    };
+
+    void initializeRecovery();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (password !== confirmPassword) {
       toast({ variant: "destructive", title: "Error", description: "Passwords do not match." });
       return;
     }
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
       toast({ title: "Password updated", description: "You can now sign in with your new password." });
       navigate("/dashboard");
     } catch (error: any) {
@@ -61,6 +101,17 @@ export default function ResetPassword() {
       setLoading(false);
     }
   };
+
+  if (linkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-sm space-y-4 text-center">
+          <p className="text-sm text-destructive">{linkError}</p>
+          <Button className="w-full" onClick={() => navigate("/auth")}>Back to sign in</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (
