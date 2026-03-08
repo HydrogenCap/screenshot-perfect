@@ -26,13 +26,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Constants } from "@/integrations/supabase/types";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { AccountCard } from "@/components/accounts/AccountCard";
+import { AccountSparkline } from "@/components/accounts/AccountSparkline";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const accountTypes = Constants.public.Enums.account_type;
 const providerTypes = Constants.public.Enums.provider_type;
 
 export default function Accounts() {
+  usePageTitle("Accounts");
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -82,6 +88,26 @@ export default function Accounts() {
     },
     enabled: !!user,
   });
+
+  // Fetch all valuations for sparklines
+  const { data: allValuations = [] } = useQuery({
+    queryKey: ["all-valuations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("valuations")
+        .select("account_id, valuation_date, total_value")
+        .order("valuation_date", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const valuationsByAccount = allValuations.reduce((acc: Record<string, any[]>, v) => {
+    if (!acc[v.account_id]) acc[v.account_id] = [];
+    acc[v.account_id].push(v);
+    return acc;
+  }, {});
 
   // Fetch providers
   const { data: providers = [] } = useQuery({
@@ -160,6 +186,7 @@ export default function Accounts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["all-valuations"] });
       toast.success(valEditId ? "Balance updated" : "Balance added");
       resetValForm();
     },
@@ -235,69 +262,98 @@ export default function Accounts() {
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Provider</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Account Name</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Total Value</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cash</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Invested</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                    No accounts yet. Click "Add Account" to get started.
-                  </td>
+      {/* Mobile card layout */}
+      {isMobile ? (
+        <div className="grid gap-4">
+          {filtered.length === 0 && !isLoading && (
+            <div className="text-center text-muted-foreground py-8">
+              No accounts yet. Click "Add Account" to get started.
+            </div>
+          )}
+          {filtered.map((account: any) => (
+            <AccountCard
+              key={account.id}
+              account={account}
+              valuations={valuationsByAccount[account.id] || []}
+              onEditBalance={() => openValDialog(account)}
+            />
+          ))}
+        </div>
+      ) : (
+        /* Desktop table layout */
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Provider</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Account Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Total Value</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cash</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Invested</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">Trend</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground"></th>
                 </tr>
-              )}
-              {filtered.map((account: any, i: number) => {
-                const v = account.latestValuation;
-                return (
-                  <tr
-                    key={account.id}
-                    className="border-b last:border-0 transition-colors hover:bg-muted/30 animate-fade-in"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  >
-                    <td className="px-4 py-3 font-medium">{account.providers?.name}</td>
-                    <td className="px-4 py-3">{account.account_name}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="secondary" className="text-[10px] font-medium">
-                        {accountTypeLabels[account.account_type] || account.account_type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-medium">
-                      {v ? formatCurrency(v.total_value) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                      {v ? formatCurrency(v.cash_balance) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                      {v ? formatCurrency(v.invested_value) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={cn("inline-flex h-2 w-2 rounded-full", account.is_active ? "bg-gain" : "bg-muted-foreground")} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
-                        <BarChart3 className="mr-1 h-3.5 w-3.5" />
-                        {v ? "Edit Balance" : "Add Balance"}
-                      </Button>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && !isLoading && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                      No accounts yet. Click "Add Account" to get started.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+                {filtered.map((account: any, i: number) => {
+                  const v = account.latestValuation;
+                  const accountValuations = valuationsByAccount[account.id] || [];
+                  return (
+                    <tr
+                      key={account.id}
+                      className="border-b last:border-0 transition-colors hover:bg-muted/30 animate-fade-in"
+                      style={{ animationDelay: `${i * 50}ms` }}
+                    >
+                      <td className="px-4 py-3 font-medium">{account.providers?.name}</td>
+                      <td className="px-4 py-3">{account.account_name}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="text-[10px] font-medium">
+                          {accountTypeLabels[account.account_type] || account.account_type}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-medium">
+                        {v ? formatCurrency(v.total_value) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                        {v ? formatCurrency(v.cash_balance) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                        {v ? formatCurrency(v.invested_value) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {accountValuations.length >= 2 ? (
+                          <AccountSparkline valuations={accountValuations} className="h-6 w-16 mx-auto" />
+                        ) : (
+                          <span className="text-muted-foreground text-center block">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn("inline-flex h-2 w-2 rounded-full", account.is_active ? "bg-gain" : "bg-muted-foreground")} />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
+                          <BarChart3 className="mr-1 h-3.5 w-3.5" />
+                          {v ? "Edit Balance" : "Add Balance"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Add Account Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
