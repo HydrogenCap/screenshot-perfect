@@ -1,7 +1,9 @@
 import { Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function Import() {
+  usePageTitle("Import CSV");
   return (
     <div className="space-y-6">
       <div>
