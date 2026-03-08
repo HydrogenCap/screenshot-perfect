@@ -80,6 +80,28 @@ export default function ResetPassword() {
     };
   }, []);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast({ variant: "destructive", title: "Error", description: "Passwords do not match." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+
+      toast({ title: "Password updated", description: "You can now sign in with your new password." });
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (linkError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
