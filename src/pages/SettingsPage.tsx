@@ -149,11 +149,30 @@ export default function SettingsPage() {
     try {
       const zip = new JSZip();
 
-      // Fetch and export all tables
+      // Fetch and export each table
+      const fetchTable = async (tableName: string) => {
+        switch (tableName) {
+          case "accounts":
+            return supabase.from("accounts").select("*");
+          case "transactions":
+            return supabase.from("transactions").select("*");
+          case "instruments":
+            return supabase.from("instruments").select("*");
+          case "holdings":
+            return supabase.from("holdings").select("*");
+          case "valuations":
+            return supabase.from("valuations").select("*");
+          case "providers":
+            return supabase.from("providers").select("*");
+          default:
+            return { data: null, error: new Error("Unknown table") };
+        }
+      };
+
       const tables = ["accounts", "transactions", "instruments", "holdings", "valuations", "providers"];
       
       for (const table of tables) {
-        const { data, error } = await supabase.from(table).select("*");
+        const { data, error } = await fetchTable(table);
         if (error) {
           console.error(`Error fetching ${table}:`, error);
           continue;
