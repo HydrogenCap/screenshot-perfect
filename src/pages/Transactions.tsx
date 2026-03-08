@@ -113,7 +113,7 @@ export default function Transactions() {
       if (dateFrom) query = query.gte("transaction_date", dateFrom);
       if (dateTo) query = query.lte("transaction_date", dateTo);
       if (selectedAccounts.length > 0) query = query.in("account_id", selectedAccounts);
-      if (selectedTypes.length > 0) query = query.in("type", selectedTypes);
+      if (selectedTypes.length > 0) query = query.in("type", selectedTypes as unknown as readonly Database["public"]["Enums"]["transaction_type"][]);
       if (search) query = query.ilike("notes", `%${search}%`);
 
       const { data, error, count } = await query;
