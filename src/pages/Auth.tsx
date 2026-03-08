@@ -88,31 +88,42 @@ export default function Auth() {
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
+          {!isForgot && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+            </div>
+          )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLogin ? "Sign In" : "Sign Up"}
+            {isForgot ? "Send Reset Link" : isLogin ? "Sign In" : "Sign Up"}
           </Button>
         </form>
 
-        <div className="text-center">
+        <div className="text-center space-y-1">
+          {isLogin && !isForgot && (
+            <button
+              type="button"
+              onClick={() => setIsForgot(true)}
+              className="block w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Forgot your password?
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => { setIsLogin(!isLogin); setIsForgot(false); }}
+            className="block w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            {isForgot ? "Back to sign in" : isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
           </button>
         </div>
       </div>
