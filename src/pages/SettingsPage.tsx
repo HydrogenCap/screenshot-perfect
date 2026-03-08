@@ -109,15 +109,32 @@ export default function SettingsPage() {
   const updateSettingsMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase
+      
+      // Check if settings exist
+      const { data: existing } = await supabase
         .from("user_settings")
-        .upsert({
-          user_id: user.id,
-          isa_warning: isaWarning,
-          tax_year_reminder: taxYearReminder,
-          weekly_summary_email: weeklySummary,
-        }, { onConflict: "user_id" });
-      if (error) throw error;
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      const payload = {
+        isa_warning: isaWarning,
+        tax_year_reminder: taxYearReminder,
+        weekly_summary_email: weeklySummary,
+      };
+      
+      if (existing) {
+        const { error } = await supabase
+          .from("user_settings")
+          .update(payload)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("user_settings")
+          .insert({ ...payload, user_id: user.id });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-settings"] });
