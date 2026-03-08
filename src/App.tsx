@@ -5,11 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
+import Transactions from "./pages/Transactions";
 import Import from "./pages/Import";
 import Instruments from "./pages/Instruments";
+import CGTReport from "./pages/CGTReport";
 import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -32,11 +35,13 @@ const App = () => (
               </ProtectedRoute>
             }
           >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/import" element={<Import />} />
-            <Route path="/instruments" element={<Instruments />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/accounts" element={<ErrorBoundary><Accounts /></ErrorBoundary>} />
+            <Route path="/transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
+            <Route path="/import" element={<ErrorBoundary><Import /></ErrorBoundary>} />
+            <Route path="/instruments" element={<ErrorBoundary><Instruments /></ErrorBoundary>} />
+            <Route path="/cgt-report" element={<ErrorBoundary><CGTReport /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<NotFound />} />
