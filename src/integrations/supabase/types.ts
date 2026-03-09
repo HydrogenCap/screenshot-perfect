@@ -483,6 +483,7 @@ export type Database = {
           created_at: string
           id: string
           isa_warning: boolean
+          onboarding_complete: boolean
           tax_year_reminder: boolean
           updated_at: string
           user_id: string
@@ -492,6 +493,7 @@ export type Database = {
           created_at?: string
           id?: string
           isa_warning?: boolean
+          onboarding_complete?: boolean
           tax_year_reminder?: boolean
           updated_at?: string
           user_id: string
@@ -501,6 +503,7 @@ export type Database = {
           created_at?: string
           id?: string
           isa_warning?: boolean
+          onboarding_complete?: boolean
           tax_year_reminder?: boolean
           updated_at?: string
           user_id?: string
