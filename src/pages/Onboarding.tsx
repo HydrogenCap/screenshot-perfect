@@ -101,6 +101,37 @@ export default function Onboarding() {
     }
   }, [step]);
 
+  const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+    setCsvFile(file);
+    Papa.parse(file, {
+      preview: 6,
+      complete: (results) => {
+        const data = results.data as string[][];
+        if (data.length > 0) {
+          setCsvPreview({
+            headers: data[0],
+            rowCount: 0,
+            sampleRows: data.slice(1, 6),
+          });
+          // Get full row count
+          Papa.parse(file, {
+            complete: (full) => {
+              setCsvPreview((prev) =>
+                prev ? { ...prev, rowCount: (full.data as string[][]).length - 1 } : prev
+              );
+            },
+          });
+        }
+      },
+    });
+  };
+
   const validAccounts = accounts.filter(
     (a) => a.provider && a.accountName && a.accountType && a.totalValue
   );
