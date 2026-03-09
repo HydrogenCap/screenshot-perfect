@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, BarChart3, Pencil } from "lucide-react";
+import { Plus, Search, BarChart3, Pencil, Trash2 } from "lucide-react";
 import { accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -224,6 +234,34 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to update account"),
   });
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteAccount, setDeleteAccount] = useState<any>(null);
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      // Delete dependent records in order
+      const { error: e1 } = await supabase.from("transactions").delete().eq("account_id", accountId);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("holdings").delete().eq("account_id", accountId);
+      if (e2) throw e2;
+      const { error: e3 } = await supabase.from("valuations").delete().eq("account_id", accountId);
+      if (e3) throw e3;
+      const { error: e4 } = await supabase.from("imports").delete().eq("account_id", accountId);
+      if (e4) throw e4;
+      const { error: e5 } = await supabase.from("accounts").delete().eq("id", accountId);
+      if (e5) throw e5;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["all-valuations"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-value"] });
+      toast.success("Account deleted");
+      setDeleteDialogOpen(false);
+      setDeleteAccount(null);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to delete account"),
+  });
+
   const openEditDialog = (account: any) => {
     setEditAccountId(account.id);
     setEditAccountName(account.account_name);
@@ -316,6 +354,7 @@ export default function Accounts() {
               valuations={valuationsByAccount[account.id] || []}
               onEditBalance={() => openValDialog(account)}
               onEdit={() => openEditDialog(account)}
+              onDelete={() => { setDeleteAccount(account); setDeleteDialogOpen(true); }}
             />
           ))}
         </div>
@@ -389,6 +428,10 @@ export default function Accounts() {
                           <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
                             <BarChart3 className="mr-1 h-3.5 w-3.5" />
                             {v ? "Edit Balance" : "Add Balance"}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { setDeleteAccount(account); setDeleteDialogOpen(true); }}>
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Delete
                           </Button>
                         </div>
                       </td>
@@ -524,6 +567,28 @@ export default function Accounts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Account Confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteAccount?.account_name}"? This will permanently remove the account and all its transactions, holdings, and valuations.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteAccount && deleteAccountMutation.mutate(deleteAccount.id)}
+              disabled={deleteAccountMutation.isPending}
+            >
+              {deleteAccountMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
