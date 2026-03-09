@@ -19,18 +19,20 @@ export interface ParsedTransaction {
   rawAction: string; // original action/type string from CSV
 }
 
-export type ProviderFormat = "trading212" | "freetrade" | "fidelity" | "unknown";
+export type ProviderFormat = "trading212" | "freetrade" | "freetrade_clean" | "fidelity" | "unknown";
 
 // ─── Detection ───────────────────────────────────────────────────────
 
 const T212_REQUIRED = ["Action", "Time", "ISIN", "No. of shares", "Price / share"];
 const FT_REQUIRED = ["Type", "Timestamp", "Title"];
+const FT_CLEAN_REQUIRED = ["Date", "Ticker", "Name", "Side", "Quantity", "Price", "Total"];
 const FIDELITY_REQUIRED = ["Order date", "Completion date", "Transaction type", "Investments", "Amount"];
 
 export function detectProvider(headers: string[]): ProviderFormat {
   const normalised = headers.map((h) => h.trim());
   if (T212_REQUIRED.every((r) => normalised.includes(r))) return "trading212";
   if (FT_REQUIRED.every((r) => normalised.includes(r))) return "freetrade";
+  if (FT_CLEAN_REQUIRED.every((r) => normalised.includes(r))) return "freetrade_clean";
   if (FIDELITY_REQUIRED.every((r) => normalised.includes(r))) return "fidelity";
   return "unknown";
 }
@@ -267,6 +269,44 @@ function parseFidelityRow(row: Record<string, string>): ParsedTransaction | null
   };
 }
 
+// ─── Freetrade Clean (ChatGPT-cleaned format) ───────────────────────
+
+const FT_CLEAN_TYPE_MAP: Record<string, ParsedTransaction["type"]> = {
+  order: "buy",
+  dividend: "dividend",
+  property: "dividend", // REIT distributions
+  interest: "interest",
+  interest_from_cash: "interest",
+  top_up: "deposit",
+  withdrawal: "withdrawal",
+  share_lending_income: "interest",
+};
+
+function parseFreetradeCleanRow(row: Record<string, string>): ParsedTransaction | null {
+  const rawSide = (row["Side"] || "").trim();
+  const sideLower = rawSide.toLowerCase().replace(/\s+/g, "_");
+
+  const type: ParsedTransaction["type"] = FT_CLEAN_TYPE_MAP[sideLower] || "other";
+  const total = num(row["Total"]) || 0;
+  const currency = (row["Name"] || "GBP").trim(); // "Name" column holds currency in this format
+
+  return {
+    date: row["Date"]?.trim() || "",
+    type,
+    ticker: row["Ticker"]?.trim() || null,
+    isin: null,
+    name: row["Ticker"]?.trim() || null,
+    quantity: num(row["Quantity"]),
+    pricePerUnit: num(row["Price"]),
+    totalAmount: Math.abs(total),
+    fees: 0,
+    currency: ["GBP", "USD", "EUR"].includes(currency) ? currency : "GBP",
+    fxRate: null,
+    notes: null,
+    rawAction: rawSide,
+  };
+}
+
 // ─── Public API ──────────────────────────────────────────────────────
 
 export function parseRows(
@@ -276,6 +316,7 @@ export function parseRows(
   const parser =
     provider === "trading212" ? parseTrading212Row :
     provider === "fidelity" ? parseFidelityRow :
+    provider === "freetrade_clean" ? parseFreetradeCleanRow :
     parseFreetradeRow;
   return rows
     .map(parser)
@@ -286,6 +327,7 @@ export function providerLabel(provider: ProviderFormat): string {
   switch (provider) {
     case "trading212": return "Trading212";
     case "freetrade": return "Freetrade";
+    case "freetrade_clean": return "Freetrade (Clean)";
     case "fidelity": return "Fidelity";
     default: return "Unknown";
   }
