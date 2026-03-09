@@ -615,9 +615,16 @@ export default function Onboarding() {
                     <span className="ml-6">Account setup skipped</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="ml-6">Transaction import skipped</span>
-                </div>
+                {csvFile ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 text-gain" />
+                    <span>CSV uploaded: {csvFile.name} ({csvPreview?.rowCount || 0} rows)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="ml-6">Transaction import skipped</span>
+                  </div>
+                )}
                 {isaAccountIndices.size > 0 && !noIsas ? (
                   <div className="flex items-center gap-2 text-sm">
                     <Check className="h-4 w-4 text-gain" />
