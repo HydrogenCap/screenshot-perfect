@@ -79,7 +79,7 @@ export default function Import() {
           setDetectedProvider(provider);
 
           if (provider === "unknown") {
-            toast.error("Could not detect CSV format. Supported: Trading212, Freetrade, Fidelity");
+            toast.error("Could not detect CSV format. Supported: Trading212, Freetrade, Freetrade (Clean), Fidelity");
             return;
           }
 
