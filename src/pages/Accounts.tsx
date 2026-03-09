@@ -29,6 +29,7 @@ import { Constants } from "@/integrations/supabase/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountSparkline } from "@/components/accounts/AccountSparkline";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 const accountTypes = Constants.public.Enums.account_type;
@@ -314,7 +315,12 @@ export default function Accounts() {
                       className="border-b last:border-0 transition-colors hover:bg-muted/30 animate-fade-in"
                       style={{ animationDelay: `${i * 50}ms` }}
                     >
-                      <td className="px-4 py-3 font-medium">{account.providers?.name}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <ProviderLogo name={account.providers?.name || "?"} logoUrl={(account.providers as any)?.logo_url} size="xs" />
+                          <span className="font-medium">{account.providers?.name}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">{account.account_name}</td>
                       <td className="px-4 py-3">
                         <Badge variant="secondary" className="text-[10px] font-medium">
@@ -369,7 +375,12 @@ export default function Accounts() {
                 <SelectContent>
                   <SelectItem value="new">+ New Provider</SelectItem>
                   {providers.map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        <ProviderLogo name={p.name} logoUrl={p.logo_url} size="xs" />
+                        {p.name}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

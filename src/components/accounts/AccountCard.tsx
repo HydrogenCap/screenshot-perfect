@@ -5,6 +5,7 @@ import { accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AccountSparkline } from "./AccountSparkline";
+import { ProviderLogo } from "@/components/ProviderLogo";
 
 interface AccountCardProps {
   account: {
@@ -12,7 +13,7 @@ interface AccountCardProps {
     account_name: string;
     account_type: string;
     is_active: boolean;
-    providers?: { name: string } | null;
+    providers?: { name: string; logo_url?: string | null } | null;
     latestValuation?: {
       total_value: number;
       cash_balance: number;
@@ -29,11 +30,21 @@ export function AccountCard({ account, valuations = [], onEditBalance }: Account
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground truncate">
-            {account.providers?.name}
-          </p>
-          <h3 className="font-semibold truncate">{account.account_name}</h3>
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+          {account.providers?.name && (
+            <ProviderLogo
+              name={account.providers.name}
+              logoUrl={account.providers.logo_url}
+              size="sm"
+              className="mt-0.5 shrink-0"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground truncate">
+              {account.providers?.name}
+            </p>
+            <h3 className="font-semibold truncate">{account.account_name}</h3>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span

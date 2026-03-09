@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,7 @@ export default function Transactions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("accounts")
-        .select("id, account_name, providers(name)");
+        .select("id, account_name, providers(name, logo_url)");
       if (error) throw error;
       return data;
     },
@@ -246,7 +247,7 @@ export default function Transactions() {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-2 max-h-60 overflow-y-auto">
-            {accounts.map(a => (
+            {accounts.map((a: any) => (
               <label
                 key={a.id}
                 className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-muted cursor-pointer"
@@ -255,6 +256,9 @@ export default function Transactions() {
                   checked={selectedAccounts.includes(a.id)}
                   onCheckedChange={() => toggleFilter(a.id, selectedAccounts, setSelectedAccounts)}
                 />
+                {a.providers?.name && (
+                  <ProviderLogo name={a.providers.name} logoUrl={a.providers.logo_url} size="xs" />
+                )}
                 <span className="truncate">{a.providers?.name} — {a.account_name}</span>
               </label>
             ))}

@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Constants } from "@/integrations/supabase/types";
 import type { Database } from "@/integrations/supabase/types";
+import { ProviderLogo } from "@/components/ProviderLogo";
 
 type TransactionType = Database["public"]["Enums"]["transaction_type"];
 const transactionTypes = Constants.public.Enums.transaction_type;
@@ -39,7 +40,7 @@ type FormValues = z.infer<typeof schema>;
 interface Account {
   id: string;
   account_name: string;
-  providers: { name: string } | null;
+  providers: { name: string; logo_url?: string | null } | null;
 }
 
 interface Instrument {
@@ -204,7 +205,12 @@ export function TransactionSheet({
                   <SelectContent>
                     {accounts.map(a => (
                       <SelectItem key={a.id} value={a.id}>
-                        {a.providers?.name} — {a.account_name}
+                        <span className="flex items-center gap-2">
+                          {a.providers?.name && (
+                            <ProviderLogo name={a.providers.name} logoUrl={a.providers.logo_url} size="xs" />
+                          )}
+                          {a.providers?.name} — {a.account_name}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
