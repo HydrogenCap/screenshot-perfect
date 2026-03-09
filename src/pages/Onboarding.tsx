@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, X, Upload, Check, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, Plus, X, Upload, Check, ArrowRight, ArrowLeft, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import Papa from "papaparse";
 
 const PROVIDER_OPTIONS = [
   "Trading212", "Freetrade", "Fidelity", "Vanguard", "AJ Bell",
