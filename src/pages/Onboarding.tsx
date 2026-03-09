@@ -256,6 +256,35 @@ export default function Onboarding() {
     }
   };
 
+  const handleSkipSetup = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const { data: existingSettings } = await supabase
+        .from("user_settings")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingSettings) {
+        await supabase
+          .from("user_settings")
+          .update({ onboarding_complete: true } as any)
+          .eq("user_id", user.id);
+      } else {
+        await supabase.from("user_settings").insert({
+          user_id: user.id,
+          onboarding_complete: true,
+        } as any);
+      }
+      navigate("/dashboard", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to skip setup");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleNext = () => {
     if (step === 5) {
       handleFinish();
