@@ -16,6 +16,7 @@ import {
   detectProvider,
   parseRows,
   providerLabel,
+  preprocessCSV,
 } from "@/lib/csv-parsers";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -58,34 +59,41 @@ export default function Import() {
     }
     setCsvFile(file);
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const rows = results.data as Record<string, string>[];
-        if (rows.length === 0) {
-          toast.error("CSV file is empty");
-          return;
-        }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rawText = ev.target?.result as string;
+      const cleanedText = preprocessCSV(rawText);
 
-        const headers = Object.keys(rows[0]);
-        const provider = detectProvider(headers);
-        setDetectedProvider(provider);
+      Papa.parse(cleanedText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const rows = results.data as Record<string, string>[];
+          if (rows.length === 0) {
+            toast.error("CSV file is empty");
+            return;
+          }
 
-        if (provider === "unknown") {
-          toast.error("Could not detect CSV format. Supported: Trading212, Freetrade");
-          return;
-        }
+          const headers = Object.keys(rows[0]);
+          const provider = detectProvider(headers);
+          setDetectedProvider(provider);
 
-        const txns = parseRows(rows, provider);
-        setParsedTxns(txns);
-        setStep("preview");
-        toast.success(`Detected ${providerLabel(provider)} — ${txns.length} transactions parsed`);
-      },
-      error: (err) => {
-        toast.error(`Error parsing CSV: ${err.message}`);
-      },
-    });
+          if (provider === "unknown") {
+            toast.error("Could not detect CSV format. Supported: Trading212, Freetrade, Fidelity");
+            return;
+          }
+
+          const txns = parseRows(rows, provider);
+          setParsedTxns(txns);
+          setStep("preview");
+          toast.success(`Detected ${providerLabel(provider)} — ${txns.length} transactions parsed`);
+        },
+        error: (err: any) => {
+          toast.error(`Error parsing CSV: ${err.message}`);
+        },
+      });
+    };
+    reader.readAsText(file);
   };
 
   const importMutation = useMutation({
@@ -283,7 +291,7 @@ export default function Import() {
           <div className="rounded-xl border bg-card p-5">
             <h3 className="text-sm font-semibold mb-3">Supported Providers</h3>
             <div className="flex flex-wrap gap-2">
-              {["Trading212", "Freetrade"].map((provider) => (
+              {["Trading212", "Freetrade", "Fidelity"].map((provider) => (
                 <span
                   key={provider}
                   className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
