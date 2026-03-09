@@ -498,6 +498,31 @@ export default function Accounts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Account Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Provider Name</Label>
+              <Input value={editProviderName} onChange={(e) => setEditProviderName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Account Name</Label>
+              <Input value={editAccountName} onChange={(e) => setEditAccountName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => editAccountMutation.mutate()} disabled={editAccountMutation.isPending}>
+              {editAccountMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
