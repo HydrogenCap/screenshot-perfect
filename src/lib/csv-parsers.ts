@@ -24,7 +24,7 @@ export type ProviderFormat = "trading212" | "freetrade" | "unknown";
 // ─── Detection ───────────────────────────────────────────────────────
 
 const T212_REQUIRED = ["Action", "Time", "ISIN", "No. of shares", "Price / share"];
-const FT_REQUIRED = ["Type", "Timestamp", "Total Amount"];
+const FT_REQUIRED = ["Type", "Timestamp", "Title"];
 
 export function detectProvider(headers: string[]): ProviderFormat {
   const normalised = headers.map((h) => h.trim());
@@ -118,19 +118,32 @@ function parseTrading212Row(row: Record<string, string>): ParsedTransaction | nu
 // ─── Freetrade ───────────────────────────────────────────────────────
 
 const FT_TYPE_MAP: Record<string, ParsedTransaction["type"]> = {
-  order: "buy", // we refine based on Buy / Sell column
+  order: "buy",
   buy: "buy",
   sell: "sell",
   dividend: "dividend",
+  property: "dividend", // REIT distributions
   interest: "interest",
+  interest_from_cash: "interest",
   top_up: "deposit",
   withdrawal: "withdrawal",
   "basic order": "buy",
+  "basic_order": "buy",
 };
+
+// Types to skip entirely (no financial transaction)
+const FT_SKIP_TYPES = new Set([
+  "monthly_statement",
+  "monthly_share_lending_statement",
+]);
 
 function parseFreetradeRow(row: Record<string, string>): ParsedTransaction | null {
   const rawType = (row["Type"] || "").trim();
   const typeLower = rawType.toLowerCase().replace(/\s+/g, "_");
+
+  // Skip non-transaction rows
+  if (FT_SKIP_TYPES.has(typeLower)) return null;
+
   let type: ParsedTransaction["type"] = FT_TYPE_MAP[typeLower] || "other";
 
   // Refine buy/sell from "Buy / Sell" column
@@ -138,18 +151,21 @@ function parseFreetradeRow(row: Record<string, string>): ParsedTransaction | nul
   if (buySell === "sell") type = "sell";
   else if (buySell === "buy") type = "buy";
 
-  const total = num(row["Total Amount"]) || num(row["Subtotal"]) || 0;
-  const fees = (num(row["Fees"]) || 0) + (num(row["Stamp Duty"]) || 0) + (num(row["FX Fee"]) || 0);
-  const currency = row["Currency"]?.trim() || "GBP";
+  // Use the correct column names from actual Freetrade CSV
+  const total = num(row["Total Amount in Account Currency"]) || num(row["Total Amount"]) || num(row["Subtotal"]) || 0;
+  const stampDuty = num(row["Stamp Duty"]) || 0;
+  const fxFeeAmount = num(row["FX Fee Amount"]) || 0;
+  const fees = stampDuty + fxFeeAmount;
+  const currency = row["Account Currency"]?.trim() || row["Currency"]?.trim() || "GBP";
 
   return {
     date: parseDate(row["Timestamp"] || ""),
     type,
-    ticker: null, // Freetrade doesn't always include ticker
+    ticker: row["Ticker"]?.trim() || null,
     isin: row["ISIN"]?.trim() || null,
     name: row["Title"]?.trim() || null,
     quantity: num(row["Quantity"]),
-    pricePerUnit: num(row["Price per Share"] || row["Price per share"]),
+    pricePerUnit: num(row["Price per Share in Account Currency"] || row["Price per Share"] || row["Price per share"]),
     totalAmount: Math.abs(total),
     fees,
     currency,
