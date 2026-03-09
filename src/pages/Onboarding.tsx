@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, X, Upload, Check, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, Plus, X, Upload, Check, ArrowRight, ArrowLeft, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import Papa from "papaparse";
 
 const PROVIDER_OPTIONS = [
   "Trading212", "Freetrade", "Fidelity", "Vanguard", "AJ Bell",
@@ -72,6 +73,11 @@ export default function Onboarding() {
   const [accounts, setAccounts] = useState<AccountEntry[]>([emptyAccount()]);
   const [skippedAccounts, setSkippedAccounts] = useState(false);
 
+  // Step 3
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rowCount: number; sampleRows: string[][] } | null>(null);
+
   // Step 4
   const [isaAccountIndices, setIsaAccountIndices] = useState<Set<number>>(new Set());
   const [noIsas, setNoIsas] = useState(false);
@@ -94,6 +100,37 @@ export default function Onboarding() {
       setIsaAccountIndices(isaIndices);
     }
   }, [step]);
+
+  const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+    setCsvFile(file);
+    Papa.parse(file, {
+      preview: 6,
+      complete: (results) => {
+        const data = results.data as string[][];
+        if (data.length > 0) {
+          setCsvPreview({
+            headers: data[0],
+            rowCount: 0,
+            sampleRows: data.slice(1, 6),
+          });
+          // Get full row count
+          Papa.parse(file, {
+            complete: (full) => {
+              setCsvPreview((prev) =>
+                prev ? { ...prev, rowCount: (full.data as string[][]).length - 1 } : prev
+              );
+            },
+          });
+        }
+      },
+    });
+  };
 
   const validAccounts = accounts.filter(
     (a) => a.provider && a.accountName && a.accountType && a.totalValue
@@ -375,20 +412,94 @@ export default function Onboarding() {
                   Upload a CSV export from your broker to populate your portfolio history. You can skip this and do it later.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setStep(4)}
-                className="flex w-full items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors hover:border-primary/50 cursor-pointer"
-              >
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                    <Upload className="h-6 w-6 text-primary" />
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleCsvSelect}
+              />
+
+              {!csvFile ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors hover:border-primary/50 cursor-pointer"
+                >
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      <Upload className="h-6 w-6 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium">Click to select a CSV file</p>
+                    <p className="text-xs text-muted-foreground">
+                      Or drag and drop your file here
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    You can import transactions from the Import page after setup
+                </button>
+              ) : (
+                <div className="rounded-xl border p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{csvFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {csvPreview ? `${csvPreview.rowCount} rows detected` : "Parsing..."}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCsvFile(null);
+                        setCsvPreview(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {csvPreview && csvPreview.headers.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b">
+                            {csvPreview.headers.slice(0, 5).map((h, i) => (
+                              <th key={i} className="text-left p-1.5 font-medium text-muted-foreground truncate max-w-[120px]">
+                                {h}
+                              </th>
+                            ))}
+                            {csvPreview.headers.length > 5 && (
+                              <th className="text-left p-1.5 text-muted-foreground">
+                                +{csvPreview.headers.length - 5} more
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {csvPreview.sampleRows.slice(0, 3).map((row, ri) => (
+                            <tr key={ri} className="border-b last:border-0">
+                              {row.slice(0, 5).map((cell, ci) => (
+                                <td key={ci} className="p-1.5 truncate max-w-[120px]">{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    You'll be able to map columns and confirm the import on the Import page after setup.
                   </p>
                 </div>
-              </button>
+              )}
+
               <p className="text-xs text-muted-foreground text-center">
                 Supported formats: Trading212, Freetrade, Hargreaves Lansdown, AJ Bell, Vanguard, InvestEngine, Interactive Investor
               </p>
@@ -504,9 +615,16 @@ export default function Onboarding() {
                     <span className="ml-6">Account setup skipped</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="ml-6">Transaction import skipped</span>
-                </div>
+                {csvFile ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 text-gain" />
+                    <span>CSV uploaded: {csvFile.name} ({csvPreview?.rowCount || 0} rows)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="ml-6">Transaction import skipped</span>
+                  </div>
+                )}
                 {isaAccountIndices.size > 0 && !noIsas ? (
                   <div className="flex items-center gap-2 text-sm">
                     <Check className="h-4 w-4 text-gain" />
