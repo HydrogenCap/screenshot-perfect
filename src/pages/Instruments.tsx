@@ -67,7 +67,8 @@ export default function Instruments() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [groupByClass, setGroupByClass] = useState(false);
-
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteName, setDeleteName] = useState("");
   // Form state
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
