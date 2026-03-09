@@ -79,6 +79,10 @@ export function AccountCard({ account, valuations = [], onEditBalance, onEdit, o
           <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
           {v ? "Edit Balance" : "Add Balance"}
         </Button>
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive col-span-2" onClick={onDelete}>
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Delete
+        </Button>
       </div>
     </div>
   );

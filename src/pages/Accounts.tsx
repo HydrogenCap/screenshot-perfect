@@ -354,6 +354,7 @@ export default function Accounts() {
               valuations={valuationsByAccount[account.id] || []}
               onEditBalance={() => openValDialog(account)}
               onEdit={() => openEditDialog(account)}
+              onDelete={() => { setDeleteAccount(account); setDeleteDialogOpen(true); }}
             />
           ))}
         </div>
