@@ -22,6 +22,7 @@ interface AccountCardProps {
   valuations?: Array<{ valuation_date: string; total_value: number }>;
   onEditBalance: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }
 
 export function AccountCard({ account, valuations = [], onEditBalance, onEdit }: AccountCardProps) {
