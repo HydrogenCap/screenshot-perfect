@@ -375,7 +375,11 @@ export default function Onboarding() {
                   Upload a CSV export from your broker to populate your portfolio history. You can skip this and do it later.
                 </p>
               </div>
-              <div className="flex items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors hover:border-primary/50">
+              <button
+                type="button"
+                onClick={() => setStep(4)}
+                className="flex w-full items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors hover:border-primary/50 cursor-pointer"
+              >
                 <div className="flex flex-col items-center gap-3 text-center">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                     <Upload className="h-6 w-6 text-primary" />
@@ -384,7 +388,7 @@ export default function Onboarding() {
                     You can import transactions from the Import page after setup
                   </p>
                 </div>
-              </div>
+              </button>
               <p className="text-xs text-muted-foreground text-center">
                 Supported formats: Trading212, Freetrade, Hargreaves Lansdown, AJ Bell, Vanguard, InvestEngine, Interactive Investor
               </p>
