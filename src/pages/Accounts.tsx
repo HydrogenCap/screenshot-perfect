@@ -234,7 +234,34 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to update account"),
   });
 
-  const openEditDialog = (account: any) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteAccount, setDeleteAccount] = useState<any>(null);
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      // Delete dependent records in order
+      const { error: e1 } = await supabase.from("transactions").delete().eq("account_id", accountId);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("holdings").delete().eq("account_id", accountId);
+      if (e2) throw e2;
+      const { error: e3 } = await supabase.from("valuations").delete().eq("account_id", accountId);
+      if (e3) throw e3;
+      const { error: e4 } = await supabase.from("imports").delete().eq("account_id", accountId);
+      if (e4) throw e4;
+      const { error: e5 } = await supabase.from("accounts").delete().eq("id", accountId);
+      if (e5) throw e5;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["all-valuations"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-value"] });
+      toast.success("Account deleted");
+      setDeleteDialogOpen(false);
+      setDeleteAccount(null);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to delete account"),
+  });
+
     setEditAccountId(account.id);
     setEditAccountName(account.account_name);
     setEditProviderName(account.providers?.name || "");
