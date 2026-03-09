@@ -24,7 +24,7 @@ export type ProviderFormat = "trading212" | "freetrade" | "unknown";
 // ─── Detection ───────────────────────────────────────────────────────
 
 const T212_REQUIRED = ["Action", "Time", "ISIN", "No. of shares", "Price / share"];
-const FT_REQUIRED = ["Type", "Timestamp", "Total Amount"];
+const FT_REQUIRED = ["Type", "Timestamp", "Title"];
 
 export function detectProvider(headers: string[]): ProviderFormat {
   const normalised = headers.map((h) => h.trim());
