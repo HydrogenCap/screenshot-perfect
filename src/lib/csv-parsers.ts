@@ -19,18 +19,20 @@ export interface ParsedTransaction {
   rawAction: string; // original action/type string from CSV
 }
 
-export type ProviderFormat = "trading212" | "freetrade" | "fidelity" | "unknown";
+export type ProviderFormat = "trading212" | "freetrade" | "freetrade_clean" | "fidelity" | "unknown";
 
 // ─── Detection ───────────────────────────────────────────────────────
 
 const T212_REQUIRED = ["Action", "Time", "ISIN", "No. of shares", "Price / share"];
 const FT_REQUIRED = ["Type", "Timestamp", "Title"];
+const FT_CLEAN_REQUIRED = ["Date", "Ticker", "Name", "Side", "Quantity", "Price", "Total"];
 const FIDELITY_REQUIRED = ["Order date", "Completion date", "Transaction type", "Investments", "Amount"];
 
 export function detectProvider(headers: string[]): ProviderFormat {
   const normalised = headers.map((h) => h.trim());
   if (T212_REQUIRED.every((r) => normalised.includes(r))) return "trading212";
   if (FT_REQUIRED.every((r) => normalised.includes(r))) return "freetrade";
+  if (FT_CLEAN_REQUIRED.every((r) => normalised.includes(r))) return "freetrade_clean";
   if (FIDELITY_REQUIRED.every((r) => normalised.includes(r))) return "fidelity";
   return "unknown";
 }
