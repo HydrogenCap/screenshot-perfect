@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { BookOpen, Search, Plus, Pencil, ArrowUpDown } from "lucide-react";
+import { BookOpen, Search, Plus, Pencil, Trash2, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -57,7 +67,8 @@ export default function Instruments() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [groupByClass, setGroupByClass] = useState(false);
-
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteName, setDeleteName] = useState("");
   // Form state
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
@@ -196,6 +207,28 @@ export default function Instruments() {
     onError: (err: any) => toast.error(err.message || "Failed to save"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (instrumentId: string) => {
+      // Check if any transactions reference this instrument
+      const { count, error: countError } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("instrument_id", instrumentId);
+      if (countError) throw countError;
+      if (count && count > 0) {
+        throw new Error(`Cannot delete: ${count} transaction(s) reference this instrument`);
+      }
+      const { error } = await supabase.from("instruments").delete().eq("id", instrumentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["instruments-with-holdings"] });
+      toast.success("Instrument deleted");
+      setDeleteId(null);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+  });
+
   const resetForm = () => {
     setDialogOpen(false);
     setEditId(null);
@@ -214,6 +247,11 @@ export default function Instruments() {
     setAssetClass(inst.asset_class);
     setCurrency(inst.currency);
     setDialogOpen(true);
+  };
+
+  const openDeleteDialog = (inst: any) => {
+    setDeleteId(inst.id);
+    setDeleteName(inst.name);
   };
 
   const renderTable = (items: any[]) => (
@@ -276,9 +314,12 @@ export default function Instruments() {
               <td className={cn("px-4 py-3 text-right font-mono", gain > 0 ? "text-gain" : gain < 0 ? "text-loss" : "text-muted-foreground")}>
                 {inst.holdings.cost_basis > 0 ? formatCurrency(gain, "GBP", { showSign: true }) : "—"}
               </td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3 space-x-1">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(inst)}>
                   <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => openDeleteDialog(inst)}>
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </td>
             </tr>
@@ -396,6 +437,27 @@ export default function Instruments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Instrument</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
