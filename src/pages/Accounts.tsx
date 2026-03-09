@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, BarChart3 } from "lucide-react";
+import { Plus, Search, BarChart3, Pencil } from "lucide-react";
 import { accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
