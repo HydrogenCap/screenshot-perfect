@@ -200,6 +200,38 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to save valuation"),
   });
 
+  const editAccountMutation = useMutation({
+    mutationFn: async () => {
+      if (!editAccountName.trim()) throw new Error("Account name is required");
+      if (!editProviderName.trim()) throw new Error("Provider name is required");
+      const { error: accErr } = await supabase
+        .from("accounts")
+        .update({ account_name: editAccountName.trim() })
+        .eq("id", editAccountId);
+      if (accErr) throw accErr;
+      const { error: provErr } = await supabase
+        .from("providers")
+        .update({ name: editProviderName.trim() })
+        .eq("id", editProviderId);
+      if (provErr) throw provErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      toast.success("Account updated");
+      setEditDialogOpen(false);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to update account"),
+  });
+
+  const openEditDialog = (account: any) => {
+    setEditAccountId(account.id);
+    setEditAccountName(account.account_name);
+    setEditProviderName(account.providers?.name || "");
+    setEditProviderId(account.provider_id);
+    setEditDialogOpen(true);
+  };
+
   const resetAccountForm = () => {
     setDialogOpen(false);
     setProviderName("");
