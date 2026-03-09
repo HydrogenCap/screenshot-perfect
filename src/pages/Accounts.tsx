@@ -49,6 +49,13 @@ export default function Accounts() {
   const [accountType, setAccountType] = useState<string>("");
   const [selectedProviderId, setSelectedProviderId] = useState<string>("new");
 
+  // Edit Account dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editAccountId, setEditAccountId] = useState<string>("");
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editProviderName, setEditProviderName] = useState("");
+  const [editProviderId, setEditProviderId] = useState("");
+
   // Add/Edit Valuation dialog state
   const [valDialogOpen, setValDialogOpen] = useState(false);
   const [valAccountId, setValAccountId] = useState<string>("");
