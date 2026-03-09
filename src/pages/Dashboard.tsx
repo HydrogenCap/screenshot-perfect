@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { TrendingUp, PiggyBank, BarChart3, Coins } from "lucide-react";
+import { TrendingUp, PiggyBank, BarChart3, Coins, CalendarDays } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -262,7 +262,19 @@ export default function Dashboard() {
       currentValue: p.currentValue,
     }));
 
-    return { totalValue, netContributions, unrealisedPL, unrealisedPLPercent, totalDividends, totalInterest, isaUsed, portfolioHistory, byProvider, byType, cashFlow, recent, performers };
+    // Annualized return
+    const allDates = transactions.map(t => t.transaction_date).sort();
+    const firstDate = allDates[0] ? new Date(allDates[0]) : null;
+    const today = new Date();
+    const daysSinceStart = firstDate
+      ? Math.max(1, Math.floor((today.getTime() - firstDate.getTime()) / 86400000))
+      : 0;
+    const annualizedReturn =
+      netContributions > 0 && daysSinceStart > 0
+        ? (Math.pow(totalValue / netContributions, 365 / daysSinceStart) - 1) * 100
+        : null;
+
+    return { totalValue, netContributions, unrealisedPL, unrealisedPLPercent, totalDividends, totalInterest, isaUsed, portfolioHistory, byProvider, byType, cashFlow, recent, performers, annualizedReturn, daysSinceStart };
   }, [accounts, valuations, transactions, holdings, dateRange, isLoading]);
 
   if (isLoading || !computed) return <DashboardSkeleton />;
@@ -282,11 +294,21 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total Portfolio" value={formatCurrency(computed.totalValue)} icon={<TrendingUp className="h-4 w-4" />} delay={0} />
         <StatCard label="Net Contributions" value={formatCurrency(computed.netContributions)} icon={<PiggyBank className="h-4 w-4" />} delay={50} />
         <StatCard label="Unrealised P&L" value={formatCurrency(computed.unrealisedPL, "GBP", { showSign: true })} change={formatPercent(computed.unrealisedPLPercent)} changeType={computed.unrealisedPL >= 0 ? "gain" : "loss"} icon={<BarChart3 className="h-4 w-4" />} delay={100} />
         <StatCard label="Dividends & Interest" value={formatCurrency(computed.totalDividends + computed.totalInterest)} change={`${formatCurrency(computed.totalDividends)} dividends`} changeType="neutral" icon={<Coins className="h-4 w-4" />} delay={150} />
+        {computed.annualizedReturn !== null && (
+          <StatCard
+            label={computed.daysSinceStart < 365 ? "Return (since start)" : "Annualised Return"}
+            value={formatPercent(computed.annualizedReturn)}
+            change={`Over ${Math.round(computed.daysSinceStart / 30)} months`}
+            changeType={computed.annualizedReturn >= 0 ? "gain" : "loss"}
+            icon={<CalendarDays className="h-4 w-4" />}
+            delay={200}
+          />
+        )}
       </div>
 
       <IsaAllowanceCard used={computed.isaUsed} limit={20000} taxYearLabel={getCurrentTaxYearLabel()} />

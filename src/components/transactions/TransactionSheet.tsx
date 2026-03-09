@@ -116,6 +116,12 @@ export function TransactionSheet({
     }
   }, [editData, form]);
 
+  const txType = form.watch("type");
+
+  // Which fields are relevant for each transaction type
+  const showInstrument = ["buy", "sell", "dividend", "corporate_action", "stock_split", "other"].includes(txType);
+  const showQtyPrice = ["buy", "sell", "stock_split", "other"].includes(txType);
+
   const qty = form.watch("quantity");
   const price = form.watch("price_per_unit");
   useEffect(() => {
@@ -123,6 +129,17 @@ export function TransactionSheet({
       form.setValue("total_amount", Number((qty * price).toFixed(2)));
     }
   }, [qty, price, form]);
+
+  // Clear instrument/qty/price when switching to a type that doesn't use them
+  useEffect(() => {
+    if (!showInstrument) {
+      form.setValue("instrument_id", "");
+    }
+    if (!showQtyPrice) {
+      form.setValue("quantity", null);
+      form.setValue("price_per_unit", null);
+    }
+  }, [txType, showInstrument, showQtyPrice, form]);
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -213,63 +230,67 @@ export function TransactionSheet({
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="instrument_id" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Instrument (optional)</FormLabel>
-                <Select
-                  onValueChange={v => field.onChange(v === "__none__" ? "" : v)}
-                  value={field.value || "__none__"}
-                >
-                  <FormControl>
-                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {instruments.map(i => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name} {i.ticker ? `(${i.ticker})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )} />
+            {showInstrument && (
+              <FormField control={form.control} name="instrument_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Instrument{txType === "other" ? " (optional)" : ""}</FormLabel>
+                  <Select
+                    onValueChange={v => field.onChange(v === "__none__" ? "" : v)}
+                    value={field.value || "__none__"}
+                  >
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {instruments.map(i => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name} {i.ticker ? `(${i.ticker})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="quantity" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantity</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="0"
-                      {...field}
-                      value={field.value ?? ""}
-                      onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="price_per_unit" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Price per unit (£)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      {...field}
-                      value={field.value ?? ""}
-                      onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
+            {showQtyPrice && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="quantity" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="0"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="price_per_unit" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Price per unit (£)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            )}
 
             <FormField control={form.control} name="total_amount" render={({ field }) => (
               <FormItem>

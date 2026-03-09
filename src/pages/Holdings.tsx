@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { TrendingUp, TrendingDown, Package2, ArrowUpDown, Download } from "lucide-react";
+import { TrendingUp, TrendingDown, Package2, ArrowUpDown, Download, Coins } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +28,11 @@ interface HoldingRow {
   instruments: { name: string; ticker: string | null; asset_class: string } | null;
 }
 
+interface DividendRow {
+  instrument_id: string | null;
+  total_amount: number;
+}
+
 type SortKey =
   | "name"
   | "quantity"
@@ -35,7 +40,8 @@ type SortKey =
   | "cost_basis"
   | "current_value"
   | "unrealised_pl"
-  | "unrealised_pl_pct";
+  | "unrealised_pl_pct"
+  | "dividend_yield";
 type SortDir = "asc" | "desc";
 
 const assetClassLabel = (v: string) =>
@@ -94,6 +100,31 @@ export default function Holdings() {
   const { user } = useAuth();
   const [sortKey, setSortKey] = useState<SortKey>("current_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const { data: dividends = [] } = useQuery({
+    queryKey: ["holdings-dividends"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("instrument_id, total_amount")
+        .eq("type", "dividend")
+        .not("instrument_id", "is", null);
+      if (error) throw error;
+      return data as DividendRow[];
+    },
+    enabled: !!user,
+  });
+
+  // Dividend total per instrument_id
+  const dividendsByInstrument = useMemo(() => {
+    const map = new Map<string, number>();
+    dividends.forEach((d) => {
+      if (d.instrument_id) {
+        map.set(d.instrument_id, (map.get(d.instrument_id) ?? 0) + d.total_amount);
+      }
+    });
+    return map;
+  }, [dividends]);
 
   const { data: holdings = [], isLoading } = useQuery({
     queryKey: ["holdings"],
@@ -155,16 +186,23 @@ export default function Holdings() {
       }
     });
 
-    return Array.from(map.values()).map((h) => ({
-      ...h,
-      avgCost: h.totalQty > 0 ? h.totalCostBasis / h.totalQty : 0,
-      unrealisedPL: h.totalCurrentValue - h.totalCostBasis,
-      unrealisedPLPct:
-        h.totalCostBasis > 0
-          ? ((h.totalCurrentValue - h.totalCostBasis) / h.totalCostBasis) * 100
-          : 0,
-    }));
-  }, [holdings]);
+    return Array.from(map.values()).map((h) => {
+      const totalDividends = h.instrumentId
+        ? (dividendsByInstrument.get(h.instrumentId) ?? 0)
+        : 0;
+      return {
+        ...h,
+        avgCost: h.totalQty > 0 ? h.totalCostBasis / h.totalQty : 0,
+        unrealisedPL: h.totalCurrentValue - h.totalCostBasis,
+        unrealisedPLPct:
+          h.totalCostBasis > 0
+            ? ((h.totalCurrentValue - h.totalCostBasis) / h.totalCostBasis) * 100
+            : 0,
+        totalDividends,
+        dividendYield: h.totalCostBasis > 0 ? (totalDividends / h.totalCostBasis) * 100 : 0,
+      };
+    });
+  }, [holdings, dividendsByInstrument]);
 
   const sorted = useMemo(() => {
     return [...aggregated].sort((a, b) => {
@@ -198,6 +236,10 @@ export default function Holdings() {
         case "unrealised_pl_pct":
           va = a.unrealisedPLPct;
           vb = b.unrealisedPLPct;
+          break;
+        case "dividend_yield":
+          va = a.dividendYield;
+          vb = b.dividendYield;
           break;
         default:
           va = a.totalCurrentValue;
@@ -237,6 +279,8 @@ export default function Holdings() {
       "Current Value (£)": h.totalCurrentValue.toFixed(2),
       "Unrealised P&L (£)": h.unrealisedPL.toFixed(2),
       "Unrealised P&L (%)": h.unrealisedPLPct.toFixed(2),
+      "Total Dividends (£)": h.totalDividends.toFixed(2),
+      "Yield on Cost (%)": h.dividendYield.toFixed(2),
     }));
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: "text/csv" });
@@ -404,6 +448,15 @@ export default function Holdings() {
                       onSort={toggleSort}
                     />
                   </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    <SortButton
+                      label="Yield on Cost"
+                      sortKey="dividend_yield"
+                      currentKey={sortKey}
+                      currentDir={sortDir}
+                      onSort={toggleSort}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -475,6 +528,16 @@ export default function Holdings() {
                       )}
                     >
                       {formatPercent(h.unrealisedPLPct)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                      {h.dividendYield > 0 ? (
+                        <span className="flex items-center justify-end gap-1 text-foreground">
+                          <Coins className="h-3 w-3 text-amber-500" />
+                          {formatPercent(h.dividendYield)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

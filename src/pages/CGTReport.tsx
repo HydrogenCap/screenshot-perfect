@@ -118,6 +118,8 @@ export default function CGTReport() {
   const totalLosses = disposals.filter(d => d.gain < 0).reduce((s, d) => s + d.gain, 0);
   const netGain = totalGains + totalLosses;
   const exemptAmount = 3000;
+  const remainingAllowance = Math.max(0, exemptAmount - Math.max(0, netGain));
+  const taxableGain = Math.max(0, netGain - exemptAmount);
 
   const handleExport = () => {
     const csv = Papa.unparse(
@@ -183,7 +185,7 @@ export default function CGTReport() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total Gains" value={formatCurrency(totalGains)} changeType="gain" />
         <StatCard
           label="Total Losses"
@@ -201,6 +203,21 @@ export default function CGTReport() {
           change="2024/25 allowance"
           changeType="neutral"
         />
+        {taxableGain > 0 ? (
+          <StatCard
+            label="Taxable Gain"
+            value={formatCurrency(taxableGain)}
+            change="Exceeds exempt amount"
+            changeType="loss"
+          />
+        ) : (
+          <StatCard
+            label="Remaining Allowance"
+            value={formatCurrency(remainingAllowance)}
+            change="Before CGT applies"
+            changeType="gain"
+          />
+        )}
       </div>
 
       {disposals.length === 0 ? (
