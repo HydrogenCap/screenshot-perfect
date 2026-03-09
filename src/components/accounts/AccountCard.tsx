@@ -69,10 +69,16 @@ export function AccountCard({ account, valuations = [], onEditBalance, onEdit }:
         )}
       </div>
 
-      <Button variant="outline" size="sm" className="w-full" onClick={onEditBalance}>
-        <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-        {v ? "Edit Balance" : "Add Balance"}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+          Edit
+        </Button>
+        <Button variant="outline" size="sm" onClick={onEditBalance}>
+          <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+          {v ? "Edit Balance" : "Add Balance"}
+        </Button>
+      </div>
     </div>
   );
 }
