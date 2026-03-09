@@ -191,13 +191,92 @@ function parseFreetradeRow(row: Record<string, string>): ParsedTransaction | nul
   };
 }
 
+// ─── Fidelity ────────────────────────────────────────────────────────
+
+const FIDELITY_TYPE_MAP: Record<string, ParsedTransaction["type"]> = {
+  buy: "buy",
+  "buy from regular savings plan": "buy",
+  sell: "sell",
+  "cash in": "deposit",
+  "cash in lump sum": "deposit",
+  "cash in regular savings plan": "deposit",
+  "cash out": "withdrawal",
+  "cash out for buy": "other", // internal cash movement, skip
+  "cash interest": "interest",
+  "service fee": "fee",
+  "reinvestment from income": "dividend",
+  "transfer to cash management account for fees": "other",
+  "cash in ring-fenced for fees": "other",
+  "dividend": "dividend",
+  "income": "dividend",
+};
+
+// Types that are internal cash movements and should be skipped
+const FIDELITY_SKIP_TYPES = new Set([
+  "cash out for buy",
+  "cash in",
+  "transfer to cash management account for fees",
+  "cash in ring-fenced for fees",
+]);
+
+function parseFidelityDate(raw: string): string {
+  if (!raw || raw.trim() === "") return raw;
+  // Format: "05 Mar 2026"
+  try {
+    const d = new Date(raw.trim());
+    if (isNaN(d.getTime())) return raw;
+    return d.toISOString().split("T")[0];
+  } catch {
+    return raw;
+  }
+}
+
+function parseFidelityRow(row: Record<string, string>): ParsedTransaction | null {
+  const rawType = (row["Transaction type"] || "").trim();
+  const typeLower = rawType.toLowerCase();
+
+  if (FIDELITY_SKIP_TYPES.has(typeLower)) return null;
+
+  const type = FIDELITY_TYPE_MAP[typeLower] || "other";
+  const investment = (row["Investments"] || "").trim();
+
+  // Skip "Cash" buy entries (these are cash allocation, not real buys)
+  if (type === "buy" && investment.toLowerCase() === "cash") return null;
+
+  const amount = num(row["Amount"]);
+  const quantity = num(row["Quantity"]);
+  const pricePerUnit = num(row["Price per unit"]);
+
+  return {
+    date: parseFidelityDate(row["Completion date"] || row["Order date"] || ""),
+    type,
+    ticker: null,
+    isin: null,
+    name: investment === "Cash" ? null : investment || null,
+    quantity,
+    pricePerUnit,
+    totalAmount: Math.abs(amount || 0),
+    fees: 0,
+    currency: "GBP",
+    fxRate: null,
+    notes: [
+      row["Product Wrapper"]?.trim(),
+      row["Reference Number"]?.trim() ? `Ref: ${row["Reference Number"].trim()}` : "",
+    ].filter(Boolean).join(" | ") || null,
+    rawAction: rawType,
+  };
+}
+
 // ─── Public API ──────────────────────────────────────────────────────
 
 export function parseRows(
   rows: Record<string, string>[],
   provider: ProviderFormat
 ): ParsedTransaction[] {
-  const parser = provider === "trading212" ? parseTrading212Row : parseFreetradeRow;
+  const parser =
+    provider === "trading212" ? parseTrading212Row :
+    provider === "fidelity" ? parseFidelityRow :
+    parseFreetradeRow;
   return rows
     .map(parser)
     .filter((t): t is ParsedTransaction => t !== null && t.totalAmount > 0);
@@ -207,6 +286,7 @@ export function providerLabel(provider: ProviderFormat): string {
   switch (provider) {
     case "trading212": return "Trading212";
     case "freetrade": return "Freetrade";
+    case "fidelity": return "Fidelity";
     default: return "Unknown";
   }
 }
