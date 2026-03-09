@@ -237,7 +237,7 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Portfolio" value={formatCurrency(computed.totalValue)} icon={<TrendingUp className="h-4 w-4" />} delay={0} />
         <StatCard label="Net Contributions" value={formatCurrency(computed.netContributions)} icon={<PiggyBank className="h-4 w-4" />} delay={50} />
-        <StatCard label="Unrealised P&L" value={formatCurrency(computed.unrealisedPL, "GBP", { showSign: true })} change={formatPercent(computed.unrealisedPLPercent)} changeType={computed.unrealisedPL >= 0 ? "gain" : "loss"} icon={<BarChart3 className="h-4 w-4" />} delay={100} />
+        <StatCard label="Unrealised P&L" value={computed.totalValue === 0 && computed.netContributions > 0 ? "N/A" : formatCurrency(computed.unrealisedPL, "GBP", { showSign: true })} change={computed.totalValue === 0 && computed.netContributions > 0 ? "No valuation data" : formatPercent(computed.unrealisedPLPercent)} changeType={computed.totalValue === 0 && computed.netContributions > 0 ? "neutral" : computed.unrealisedPL >= 0 ? "gain" : "loss"} icon={<BarChart3 className="h-4 w-4" />} delay={100} />
         <StatCard label="Dividends & Interest" value={formatCurrency(computed.totalDividends + computed.totalInterest)} change={`${formatCurrency(computed.totalDividends)} dividends`} changeType="neutral" icon={<Coins className="h-4 w-4" />} delay={150} />
       </div>
 
