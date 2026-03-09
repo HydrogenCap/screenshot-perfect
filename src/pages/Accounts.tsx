@@ -428,6 +428,10 @@ export default function Accounts() {
                             <BarChart3 className="mr-1 h-3.5 w-3.5" />
                             {v ? "Edit Balance" : "Add Balance"}
                           </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { setDeleteAccount(account); setDeleteDialogOpen(true); }}>
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Delete
+                          </Button>
                         </div>
                       </td>
                     </tr>
