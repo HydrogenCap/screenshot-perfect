@@ -15,6 +15,7 @@ import Instruments from "./pages/Instruments";
 import CGTReport from "./pages/CGTReport";
 import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
