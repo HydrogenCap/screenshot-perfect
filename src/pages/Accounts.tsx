@@ -262,6 +262,7 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to delete account"),
   });
 
+  const openEditDialog = (account: any) => {
     setEditAccountId(account.id);
     setEditAccountName(account.account_name);
     setEditProviderName(account.providers?.name || "");
