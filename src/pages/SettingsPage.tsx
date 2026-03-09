@@ -203,14 +203,15 @@ export default function SettingsPage() {
     setDeleting(true);
     try {
       // Delete in order to respect foreign keys
-      await supabase.from("holdings").delete().neq("id", "");
-      await supabase.from("valuations").delete().neq("id", "");
-      await supabase.from("transactions").delete().neq("id", "");
-      await supabase.from("imports").delete().neq("id", "");
-      await supabase.from("instruments").delete().neq("id", "");
-      await supabase.from("accounts").delete().neq("id", "");
-      await supabase.from("csv_mappings").delete().neq("id", "");
-      await supabase.from("providers").delete().neq("id", "");
+      // Use .gte("created_at", "1970-01-01") to match all rows (neq with empty string fails for UUID columns)
+      await supabase.from("holdings").delete().gte("created_at", "1970-01-01");
+      await supabase.from("valuations").delete().gte("created_at", "1970-01-01");
+      await supabase.from("transactions").delete().gte("created_at", "1970-01-01");
+      await supabase.from("imports").delete().gte("created_at", "1970-01-01");
+      await supabase.from("instruments").delete().gte("created_at", "1970-01-01");
+      await supabase.from("accounts").delete().gte("created_at", "1970-01-01");
+      await supabase.from("csv_mappings").delete().gte("created_at", "1970-01-01");
+      await supabase.from("providers").delete().gte("created_at", "1970-01-01");
 
       queryClient.invalidateQueries();
       toast.success("All data deleted");
