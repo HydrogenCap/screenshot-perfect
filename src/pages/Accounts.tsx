@@ -380,10 +380,16 @@ export default function Accounts() {
                         <span className={cn("inline-flex h-2 w-2 rounded-full", account.is_active ? "bg-gain" : "bg-muted-foreground")} />
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
-                          <BarChart3 className="mr-1 h-3.5 w-3.5" />
-                          {v ? "Edit Balance" : "Add Balance"}
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(account)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
+                            <BarChart3 className="mr-1 h-3.5 w-3.5" />
+                            {v ? "Edit Balance" : "Add Balance"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
