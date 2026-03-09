@@ -5,23 +5,55 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Papa from "papaparse";
 import {
-  ParsedTransaction,
-  ProviderFormat,
-  detectProvider,
-  parseRows,
-  providerLabel,
-  preprocessCSV,
-} from "@/lib/csv-parsers";
-import { formatCurrency } from "@/lib/format";
+  BrokerKey,
+  CanonicalTransaction,
+  BROKER_DETECTION,
+  BROKER_LABELS,
+} from "@/lib/brokerMappings";
+import { normaliseRows } from "@/hooks/useCsvNormaliser";
+import { importTransactions } from "@/lib/importTransactions";
+import ImportPreviewTable from "@/components/import/ImportPreviewTable";
 import { cn } from "@/lib/utils";
 
 type ImportStep = "upload" | "preview" | "importing" | "done";
+
+function detectBroker(headers: string[]): BrokerKey | null {
+  const normalised = headers.map((h) => h.trim());
+  for (const [broker, required] of Object.entries(BROKER_DETECTION) as [BrokerKey, string[]][]) {
+    if (required.every((r) => normalised.includes(r))) return broker;
+  }
+  return null;
+}
+
+/**
+ * Fidelity CSVs have metadata rows before the actual header.
+ */
+function preprocessCSV(rawText: string): string {
+  const lines = rawText.split(/\r?\n/);
+  const headerIdx = lines.findIndex((l) => l.includes("Order date") && l.includes("Transaction type"));
+  if (headerIdx > 0) {
+    return lines.slice(headerIdx).join("\n");
+  }
+  return rawText;
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  buy: "bg-gain/15 text-gain",
+  sell: "bg-loss/15 text-loss",
+  dividend: "bg-primary/15 text-primary",
+  interest: "bg-primary/15 text-primary",
+  deposit: "bg-muted text-muted-foreground",
+  withdrawal: "bg-muted text-muted-foreground",
+  fee: "bg-loss/15 text-loss",
+  other: "bg-muted text-muted-foreground",
+};
 
 export default function Import() {
   usePageTitle("Import CSV");
@@ -29,12 +61,13 @@ export default function Import() {
   const queryClient = useQueryClient();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeBrokerTab, setActiveBrokerTab] = useState<BrokerKey>("freetrade");
   const [step, setStep] = useState<ImportStep>("upload");
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [detectedProvider, setDetectedProvider] = useState<ProviderFormat>("unknown");
-  const [parsedTxns, setParsedTxns] = useState<ParsedTransaction[]>([]);
+  const [detectedBroker, setDetectedBroker] = useState<BrokerKey | null>(null);
+  const [parsedTxns, setParsedTxns] = useState<CanonicalTransaction[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ inserted: number; duplicates: number; errors: string[] } | null>(null);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
@@ -62,8 +95,8 @@ export default function Import() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       let rawText = ev.target?.result as string;
-      // Strip BOM character if present
-      if (rawText.charCodeAt(0) === 0xFEFF) {
+      // Strip BOM
+      if (rawText.charCodeAt(0) === 0xfeff) {
         rawText = rawText.slice(1);
       }
       const cleanedText = preprocessCSV(rawText);
@@ -81,20 +114,22 @@ export default function Import() {
 
           const headers = Object.keys(rows[0]);
           console.log("CSV headers detected:", headers);
-          const provider = detectProvider(headers);
-          console.log("Provider detected:", provider);
-          setDetectedProvider(provider);
+          const broker = detectBroker(headers);
+          console.log("Broker detected:", broker);
 
-          if (provider === "unknown") {
-            toast.error("Could not detect CSV format. Supported: Trading212, Freetrade, Freetrade (Clean), Fidelity");
+          if (!broker) {
+            toast.error("Could not detect CSV format. Supported: Freetrade, Fidelity, Trading 212");
             return;
           }
 
-          const txns = parseRows(rows, provider);
-          console.log("Parsed transactions:", txns.length, txns.slice(0, 3));
+          setDetectedBroker(broker);
+          setActiveBrokerTab(broker);
+
+          const txns = normaliseRows(rows, broker);
+          console.log(`Normalised ${txns.length} transactions from ${broker}`, txns.slice(0, 3));
           setParsedTxns(txns);
           setStep("preview");
-          toast.success(`Detected ${providerLabel(provider)} — ${txns.length} transactions parsed`);
+          toast.success(`Detected ${BROKER_LABELS[broker]} — ${txns.length} transactions parsed`);
         },
         error: (err: any) => {
           toast.error(`Error parsing CSV: ${err.message}`);
@@ -104,7 +139,7 @@ export default function Import() {
     reader.readAsText(file);
   };
 
-  const importMutation = useMutation({
+  const doImport = useMutation({
     mutationFn: async () => {
       if (!user || !selectedAccountId || parsedTxns.length === 0) {
         throw new Error("Missing account or transactions");
@@ -126,93 +161,22 @@ export default function Import() {
         .single();
       if (importErr) throw importErr;
 
-      // Ensure instruments exist (find or create by ISIN/name)
-      const instrumentCache: Record<string, string> = {};
-      for (const txn of parsedTxns) {
-        if (!txn.isin && !txn.name) continue;
-        if (txn.type === "deposit" || txn.type === "withdrawal" || txn.type === "interest") continue;
-
-        const cacheKey = txn.isin || txn.name || "";
-        if (instrumentCache[cacheKey]) continue;
-
-        // Try find existing
-        let query = supabase.from("instruments").select("id").eq("user_id", user.id);
-        if (txn.isin) query = query.eq("isin", txn.isin);
-        else if (txn.name) query = query.eq("name", txn.name);
-
-        const { data: existing } = await query.maybeSingle();
-        if (existing) {
-          instrumentCache[cacheKey] = existing.id;
-        } else {
-          const { data: newInst, error: instErr } = await supabase
-            .from("instruments")
-            .insert({
-              user_id: user.id,
-              name: txn.name || txn.ticker || txn.isin || "Unknown",
-              ticker: txn.ticker,
-              isin: txn.isin,
-              currency: txn.currency,
-            })
-            .select("id")
-            .single();
-          if (instErr) throw instErr;
-          instrumentCache[cacheKey] = newInst.id;
-        }
-      }
-
-      // Insert transactions in batches
-      let imported = 0;
-      let skipped = 0;
-      const BATCH_SIZE = 50;
-
-      for (let i = 0; i < parsedTxns.length; i += BATCH_SIZE) {
-        const batch = parsedTxns.slice(i, i + BATCH_SIZE);
-        const rows = batch.map((txn) => {
-          const cacheKey = txn.isin || txn.name || "";
-          const instrumentId = instrumentCache[cacheKey] || null;
-          const needsInstrument = !["deposit", "withdrawal", "interest"].includes(txn.type);
-
-          return {
-            account_id: selectedAccountId,
-            transaction_date: txn.date,
-            type: txn.type as any,
-            quantity: txn.quantity,
-            price_per_unit: txn.pricePerUnit,
-            total_amount: txn.totalAmount,
-            fees: txn.fees,
-            currency: txn.currency,
-            fx_rate: txn.fxRate,
-            instrument_id: needsInstrument ? instrumentId : null,
-            import_id: importRecord.id,
-            notes: txn.notes,
-          };
-        });
-
-        const { error: txnErr, data } = await supabase
-          .from("transactions")
-          .insert(rows)
-          .select("id");
-
-        if (txnErr) {
-          console.error("Batch insert error:", txnErr);
-          skipped += batch.length;
-        } else {
-          imported += (data?.length || 0);
-        }
-      }
+      const result = await importTransactions(parsedTxns, user.id, selectedAccountId, importRecord.id);
 
       // Update import record
       await supabase
         .from("imports")
         .update({
           status: "confirmed" as any,
-          imported_count: imported,
-          skipped_count: skipped,
+          imported_count: result.inserted,
+          skipped_count: result.duplicates,
+          error_count: result.errors.length,
+          error_log: result.errors.length > 0 ? result.errors as any : null,
           confirmed_at: new Date().toISOString(),
         })
         .eq("id", importRecord.id);
 
-      return { imported, skipped };
+      return result;
     },
     onSuccess: (result) => {
       setImportResult(result);
@@ -220,7 +184,11 @@ export default function Import() {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["portfolio-value"] });
-      toast.success(`Imported ${result.imported} transactions`);
+      queryClient.invalidateQueries({ queryKey: ["holdings"] });
+
+      const msg = `Import complete — ${result.inserted} transactions added` +
+        (result.duplicates > 0 ? `, ${result.duplicates} duplicates skipped` : "");
+      toast.success(msg);
     },
     onError: (err: any) => {
       toast.error(err.message || "Import failed");
@@ -231,7 +199,7 @@ export default function Import() {
   const clearFile = () => {
     setCsvFile(null);
     setParsedTxns([]);
-    setDetectedProvider("unknown");
+    setDetectedBroker(null);
     setSelectedAccountId("");
     setImportResult(null);
     setStep("upload");
@@ -243,23 +211,14 @@ export default function Import() {
     return acc;
   }, {});
 
-  const TYPE_COLORS: Record<string, string> = {
-    buy: "bg-gain/15 text-gain",
-    sell: "bg-loss/15 text-loss",
-    dividend: "bg-primary/15 text-primary",
-    interest: "bg-primary/15 text-primary",
-    deposit: "bg-muted text-muted-foreground",
-    withdrawal: "bg-muted text-muted-foreground",
-    fee: "bg-loss/15 text-loss",
-    other: "bg-muted text-muted-foreground",
-  };
+  const totalValue = parsedTxns.reduce((sum, t) => sum + t.netAmountGbp, 0);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Import CSV</h1>
         <p className="text-sm text-muted-foreground">
-          Upload transaction data from your providers
+          Upload transaction data from your broker
         </p>
       </div>
 
@@ -271,45 +230,50 @@ export default function Import() {
         onChange={handleFileSelect}
       />
 
-      {/* Step: Upload */}
+      {/* Step: Upload — with broker tabs */}
       {step === "upload" && (
-        <>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center rounded-xl border-2 border-dashed bg-card p-16 transition-colors hover:border-primary/50 cursor-pointer"
-          >
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Upload className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Drop your CSV file here</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Supports Trading212, Freetrade and more
-                </p>
-              </div>
-              <Button type="button" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-                <FileText className="mr-2 h-4 w-4" />
-                Browse Files
-              </Button>
-            </div>
-          </button>
+        <Tabs value={activeBrokerTab} onValueChange={(v) => setActiveBrokerTab(v as BrokerKey)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="freetrade">Freetrade</TabsTrigger>
+            <TabsTrigger value="fidelity">Fidelity</TabsTrigger>
+            <TabsTrigger value="trading212">Trading 212</TabsTrigger>
+          </TabsList>
 
-          <div className="rounded-xl border bg-card p-5">
-            <h3 className="text-sm font-semibold mb-3">Supported Providers</h3>
-            <div className="flex flex-wrap gap-2">
-              {["Trading212", "Freetrade", "Fidelity"].map((provider) => (
-                <span
-                  key={provider}
-                  className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
-                >
-                  {provider}
-                </span>
-              ))}
-            </div>
-          </div>
-        </>
+          {(["freetrade", "fidelity", "trading212"] as BrokerKey[]).map((broker) => (
+            <TabsContent key={broker} value={broker} className="space-y-4">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex w-full items-center justify-center rounded-xl border-2 border-dashed bg-card p-16 transition-colors hover:border-primary/50 cursor-pointer"
+              >
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                    <Upload className="h-8 w-8 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Drop your {BROKER_LABELS[broker]} CSV here</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {broker === "freetrade" && "Export from Profile → Statements & History → Download CSV"}
+                      {broker === "fidelity" && "Export from Portfolio → Transaction History → Export to CSV"}
+                      {broker === "trading212" && "Export from History → Export → CSV (one file per account)"}
+                    </p>
+                  </div>
+                  <Button type="button" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Browse Files
+                  </Button>
+                </div>
+              </button>
+
+              {broker === "trading212" && (
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <AlertCircle className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+                  Trading 212 exports one file per account (ISA / Invest). Select the correct account after upload.
+                </div>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
       )}
 
       {/* Step: Preview */}
@@ -324,7 +288,7 @@ export default function Import() {
               <div>
                 <p className="text-sm font-medium">{csvFile?.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {providerLabel(detectedProvider)} · {parsedTxns.length} transactions
+                  {detectedBroker ? BROKER_LABELS[detectedBroker] : "Unknown"} · {parsedTxns.length} transactions
                 </p>
               </div>
             </div>
@@ -333,13 +297,16 @@ export default function Import() {
             </Button>
           </div>
 
-          {/* Transaction summary badges */}
-          <div className="flex flex-wrap gap-2">
+          {/* Summary row */}
+          <div className="flex flex-wrap items-center gap-2">
             {Object.entries(typeCounts).map(([type, count]) => (
               <Badge key={type} variant="outline" className={cn("text-xs", TYPE_COLORS[type])}>
                 {type} ({count})
               </Badge>
             ))}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {parsedTxns.length} valid · {parsedTxns.length} rows detected
+            </span>
           </div>
 
           {/* Account selector */}
@@ -367,51 +334,13 @@ export default function Import() {
           </div>
 
           {/* Preview table */}
-          <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/50 sticky top-0">
-                  <tr className="border-b">
-                    <th className="text-left p-2 font-medium text-muted-foreground">Date</th>
-                    <th className="text-left p-2 font-medium text-muted-foreground">Type</th>
-                    <th className="text-left p-2 font-medium text-muted-foreground">Name</th>
-                    <th className="text-right p-2 font-medium text-muted-foreground">Qty</th>
-                    <th className="text-right p-2 font-medium text-muted-foreground">Price</th>
-                    <th className="text-right p-2 font-medium text-muted-foreground">Total</th>
-                    <th className="text-right p-2 font-medium text-muted-foreground">Fees</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parsedTxns.slice(0, 100).map((txn, i) => (
-                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="p-2 whitespace-nowrap">{txn.date}</td>
-                      <td className="p-2">
-                        <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", TYPE_COLORS[txn.type])}>
-                          {txn.type}
-                        </span>
-                      </td>
-                      <td className="p-2 truncate max-w-[200px]">{txn.name || txn.ticker || "—"}</td>
-                      <td className="p-2 text-right tabular-nums">{txn.quantity?.toFixed(2) ?? "—"}</td>
-                      <td className="p-2 text-right tabular-nums">{txn.pricePerUnit != null ? formatCurrency(txn.pricePerUnit) : "—"}</td>
-                      <td className="p-2 text-right tabular-nums font-medium">{formatCurrency(txn.totalAmount)}</td>
-                      <td className="p-2 text-right tabular-nums">{txn.fees > 0 ? formatCurrency(txn.fees) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {parsedTxns.length > 100 && (
-              <div className="border-t bg-muted/30 p-2 text-center text-xs text-muted-foreground">
-                Showing 100 of {parsedTxns.length} transactions
-              </div>
-            )}
-          </div>
+          <ImportPreviewTable transactions={parsedTxns} />
 
           {/* Actions */}
           <div className="flex items-center justify-between">
             <Button variant="outline" onClick={clearFile}>Cancel</Button>
             <Button
-              onClick={() => importMutation.mutate()}
+              onClick={() => doImport.mutate()}
               disabled={!selectedAccountId || parsedTxns.length === 0}
             >
               Import {parsedTxns.length} transactions
@@ -438,9 +367,14 @@ export default function Import() {
           <div className="text-center">
             <h3 className="text-lg font-semibold">Import complete</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {importResult.imported} transactions imported
-              {importResult.skipped > 0 && `, ${importResult.skipped} skipped`}
+              {importResult.inserted} transactions added
+              {importResult.duplicates > 0 && `, ${importResult.duplicates} duplicates skipped`}
             </p>
+            {importResult.errors.length > 0 && (
+              <p className="text-xs text-destructive mt-2">
+                {importResult.errors.length} error(s) — check console for details
+              </p>
+            )}
           </div>
           <Button onClick={clearFile}>Import another file</Button>
         </div>
