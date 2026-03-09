@@ -25,12 +25,28 @@ export type ProviderFormat = "trading212" | "freetrade" | "fidelity" | "unknown"
 
 const T212_REQUIRED = ["Action", "Time", "ISIN", "No. of shares", "Price / share"];
 const FT_REQUIRED = ["Type", "Timestamp", "Title"];
+const FIDELITY_REQUIRED = ["Order date", "Completion date", "Transaction type", "Investments", "Amount"];
 
 export function detectProvider(headers: string[]): ProviderFormat {
   const normalised = headers.map((h) => h.trim());
   if (T212_REQUIRED.every((r) => normalised.includes(r))) return "trading212";
   if (FT_REQUIRED.every((r) => normalised.includes(r))) return "freetrade";
+  if (FIDELITY_REQUIRED.every((r) => normalised.includes(r))) return "fidelity";
   return "unknown";
+}
+
+/**
+ * Fidelity CSVs have metadata rows before the actual header.
+ * This function strips them and returns clean CSV text.
+ */
+export function preprocessCSV(rawText: string): string {
+  const lines = rawText.split(/\r?\n/);
+  // Find the line that looks like the real header (contains "Order date")
+  const headerIdx = lines.findIndex((l) => l.includes("Order date") && l.includes("Transaction type"));
+  if (headerIdx > 0) {
+    return lines.slice(headerIdx).join("\n");
+  }
+  return rawText;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
