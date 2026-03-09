@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, BarChart3 } from "lucide-react";
+import { Plus, Search, BarChart3, Pencil } from "lucide-react";
 import { accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,13 @@ export default function Accounts() {
   const [accountName, setAccountName] = useState("");
   const [accountType, setAccountType] = useState<string>("");
   const [selectedProviderId, setSelectedProviderId] = useState<string>("new");
+
+  // Edit Account dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editAccountId, setEditAccountId] = useState<string>("");
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editProviderName, setEditProviderName] = useState("");
+  const [editProviderId, setEditProviderId] = useState("");
 
   // Add/Edit Valuation dialog state
   const [valDialogOpen, setValDialogOpen] = useState(false);
@@ -193,6 +200,38 @@ export default function Accounts() {
     onError: (err: any) => toast.error(err.message || "Failed to save valuation"),
   });
 
+  const editAccountMutation = useMutation({
+    mutationFn: async () => {
+      if (!editAccountName.trim()) throw new Error("Account name is required");
+      if (!editProviderName.trim()) throw new Error("Provider name is required");
+      const { error: accErr } = await supabase
+        .from("accounts")
+        .update({ account_name: editAccountName.trim() })
+        .eq("id", editAccountId);
+      if (accErr) throw accErr;
+      const { error: provErr } = await supabase
+        .from("providers")
+        .update({ name: editProviderName.trim() })
+        .eq("id", editProviderId);
+      if (provErr) throw provErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      toast.success("Account updated");
+      setEditDialogOpen(false);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to update account"),
+  });
+
+  const openEditDialog = (account: any) => {
+    setEditAccountId(account.id);
+    setEditAccountName(account.account_name);
+    setEditProviderName(account.providers?.name || "");
+    setEditProviderId(account.provider_id);
+    setEditDialogOpen(true);
+  };
+
   const resetAccountForm = () => {
     setDialogOpen(false);
     setProviderName("");
@@ -276,6 +315,7 @@ export default function Accounts() {
               account={account}
               valuations={valuationsByAccount[account.id] || []}
               onEditBalance={() => openValDialog(account)}
+              onEdit={() => openEditDialog(account)}
             />
           ))}
         </div>
@@ -341,10 +381,16 @@ export default function Accounts() {
                         <span className={cn("inline-flex h-2 w-2 rounded-full", account.is_active ? "bg-gain" : "bg-muted-foreground")} />
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
-                          <BarChart3 className="mr-1 h-3.5 w-3.5" />
-                          {v ? "Edit Balance" : "Add Balance"}
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(account)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => openValDialog(account)}>
+                            <BarChart3 className="mr-1 h-3.5 w-3.5" />
+                            {v ? "Edit Balance" : "Add Balance"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -449,6 +495,31 @@ export default function Accounts() {
             <Button variant="outline" onClick={resetValForm}>Cancel</Button>
             <Button onClick={() => saveValuationMutation.mutate()} disabled={saveValuationMutation.isPending}>
               {saveValuationMutation.isPending ? "Saving…" : valEditId ? "Update Balance" : "Save Balance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Account Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Provider Name</Label>
+              <Input value={editProviderName} onChange={(e) => setEditProviderName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Account Name</Label>
+              <Input value={editAccountName} onChange={(e) => setEditAccountName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => editAccountMutation.mutate()} disabled={editAccountMutation.isPending}>
+              {editAccountMutation.isPending ? "Saving…" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

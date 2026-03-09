@@ -1,4 +1,4 @@
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { accountTypeLabels } from "@/lib/mock-data";
@@ -21,9 +21,10 @@ interface AccountCardProps {
   };
   valuations?: Array<{ valuation_date: string; total_value: number }>;
   onEditBalance: () => void;
+  onEdit: () => void;
 }
 
-export function AccountCard({ account, valuations = [], onEditBalance }: AccountCardProps) {
+export function AccountCard({ account, valuations = [], onEditBalance, onEdit }: AccountCardProps) {
   const v = account.latestValuation;
 
   return (
@@ -68,10 +69,16 @@ export function AccountCard({ account, valuations = [], onEditBalance }: Account
         )}
       </div>
 
-      <Button variant="outline" size="sm" className="w-full" onClick={onEditBalance}>
-        <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-        {v ? "Edit Balance" : "Add Balance"}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+          Edit
+        </Button>
+        <Button variant="outline" size="sm" onClick={onEditBalance}>
+          <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+          {v ? "Edit Balance" : "Add Balance"}
+        </Button>
+      </div>
     </div>
   );
 }
