@@ -19,7 +19,7 @@ export interface ParsedTransaction {
   rawAction: string; // original action/type string from CSV
 }
 
-export type ProviderFormat = "trading212" | "freetrade" | "unknown";
+export type ProviderFormat = "trading212" | "freetrade" | "fidelity" | "unknown";
 
 // ─── Detection ───────────────────────────────────────────────────────
 
