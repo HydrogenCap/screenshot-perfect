@@ -165,7 +165,7 @@ export function parseRows(
   rows: Record<string, string>[],
   provider: ProviderFormat
 ): ParsedTransaction[] {
-  const parser = provider === "trading212" ? parseTrading212Row : parseFreetrade Row;
+  const parser = provider === "trading212" ? parseTrading212Row : parseFreetradeRow;
   return rows
     .map(parser)
     .filter((t): t is ParsedTransaction => t !== null && t.totalAmount > 0);
