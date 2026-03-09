@@ -207,6 +207,28 @@ export default function Instruments() {
     onError: (err: any) => toast.error(err.message || "Failed to save"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (instrumentId: string) => {
+      // Check if any transactions reference this instrument
+      const { count, error: countError } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("instrument_id", instrumentId);
+      if (countError) throw countError;
+      if (count && count > 0) {
+        throw new Error(`Cannot delete: ${count} transaction(s) reference this instrument`);
+      }
+      const { error } = await supabase.from("instruments").delete().eq("id", instrumentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["instruments-with-holdings"] });
+      toast.success("Instrument deleted");
+      setDeleteId(null);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to delete"),
+  });
+
   const resetForm = () => {
     setDialogOpen(false);
     setEditId(null);
@@ -225,6 +247,11 @@ export default function Instruments() {
     setAssetClass(inst.asset_class);
     setCurrency(inst.currency);
     setDialogOpen(true);
+  };
+
+  const openDeleteDialog = (inst: any) => {
+    setDeleteId(inst.id);
+    setDeleteName(inst.name);
   };
 
   const renderTable = (items: any[]) => (
