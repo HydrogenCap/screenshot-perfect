@@ -315,6 +315,7 @@ export default function Accounts() {
               account={account}
               valuations={valuationsByAccount[account.id] || []}
               onEditBalance={() => openValDialog(account)}
+              onEdit={() => openEditDialog(account)}
             />
           ))}
         </div>
