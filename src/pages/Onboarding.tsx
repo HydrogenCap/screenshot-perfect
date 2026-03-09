@@ -302,17 +302,27 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-[560px]">
-        {/* Progress dots */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div
-              key={s}
-              className={cn(
-                "h-2.5 w-2.5 rounded-full transition-colors",
-                s <= step ? "bg-primary" : "bg-border"
-              )}
-            />
-          ))}
+        <div className="flex items-center justify-between mb-6">
+          <div />
+          <div className="flex items-center gap-2">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <div
+                key={s}
+                className={cn(
+                  "h-2.5 w-2.5 rounded-full transition-colors",
+                  s <= step ? "bg-primary" : "bg-border"
+                )}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleSkipSetup}
+            disabled={saving}
+            className="text-xs text-muted-foreground hover:underline"
+          >
+            Skip setup
+          </button>
         </div>
 
         <Card className="p-6 sm:p-8 shadow-lg">
