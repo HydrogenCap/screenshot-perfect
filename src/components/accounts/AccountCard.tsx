@@ -25,7 +25,7 @@ interface AccountCardProps {
   onDelete: () => void;
 }
 
-export function AccountCard({ account, valuations = [], onEditBalance, onEdit }: AccountCardProps) {
+export function AccountCard({ account, valuations = [], onEditBalance, onEdit, onDelete }: AccountCardProps) {
   const v = account.latestValuation;
 
   return (
