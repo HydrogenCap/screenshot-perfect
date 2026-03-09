@@ -128,7 +128,7 @@ const FT_TYPE_MAP: Record<string, ParsedTransaction["type"]> = {
   "basic order": "buy",
 };
 
-function parseFreetrade Row(row: Record<string, string>): ParsedTransaction | null {
+function parseFreetradeRow(row: Record<string, string>): ParsedTransaction | null {
   const rawType = (row["Type"] || "").trim();
   const typeLower = rawType.toLowerCase().replace(/\s+/g, "_");
   let type: ParsedTransaction["type"] = FT_TYPE_MAP[typeLower] || "other";
