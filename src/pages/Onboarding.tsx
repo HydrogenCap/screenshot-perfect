@@ -73,6 +73,11 @@ export default function Onboarding() {
   const [accounts, setAccounts] = useState<AccountEntry[]>([emptyAccount()]);
   const [skippedAccounts, setSkippedAccounts] = useState(false);
 
+  // Step 3
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ headers: string[]; rowCount: number; sampleRows: string[][] } | null>(null);
+
   // Step 4
   const [isaAccountIndices, setIsaAccountIndices] = useState<Set<number>>(new Set());
   const [noIsas, setNoIsas] = useState(false);
