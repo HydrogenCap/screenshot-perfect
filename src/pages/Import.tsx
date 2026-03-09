@@ -291,7 +291,7 @@ export default function Import() {
           <div className="rounded-xl border bg-card p-5">
             <h3 className="text-sm font-semibold mb-3">Supported Providers</h3>
             <div className="flex flex-wrap gap-2">
-              {["Trading212", "Freetrade"].map((provider) => (
+              {["Trading212", "Freetrade", "Fidelity"].map((provider) => (
                 <span
                   key={provider}
                   className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
