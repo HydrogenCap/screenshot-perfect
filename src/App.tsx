@@ -13,6 +13,7 @@ import Transactions from "./pages/Transactions";
 import Import from "./pages/Import";
 import Instruments from "./pages/Instruments";
 import CGTReport from "./pages/CGTReport";
+import Holdings from "./pages/Holdings";
 import SettingsPage from "./pages/SettingsPage";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/accounts" element={<ErrorBoundary><Accounts /></ErrorBoundary>} />
             <Route path="/transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
             <Route path="/import" element={<ErrorBoundary><Import /></ErrorBoundary>} />
+            <Route path="/holdings" element={<ErrorBoundary><Holdings /></ErrorBoundary>} />
             <Route path="/instruments" element={<ErrorBoundary><Instruments /></ErrorBoundary>} />
             <Route path="/cgt-report" element={<ErrorBoundary><CGTReport /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />

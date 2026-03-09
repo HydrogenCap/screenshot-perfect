@@ -8,6 +8,7 @@ import {
   Settings,
   TrendingUp,
   PoundSterling,
+  Package2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -31,6 +32,7 @@ const mainNav = [
   { title: "Accounts", url: "/accounts", icon: Wallet },
   { title: "Transactions", url: "/transactions", icon: Receipt },
   { title: "Import CSV", url: "/import", icon: Upload },
+  { title: "Holdings", url: "/holdings", icon: Package2 },
   { title: "Instruments", url: "/instruments", icon: BookOpen },
   { title: "CGT Report", url: "/cgt-report", icon: FileText },
 ];

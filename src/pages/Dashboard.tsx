@@ -10,6 +10,7 @@ import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { CashFlowChart } from "@/components/dashboard/CashFlowChart";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { IsaAllowanceCard } from "@/components/dashboard/IsaAllowanceCard";
+import { TopPerformers } from "@/components/dashboard/TopPerformers";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import {
@@ -74,6 +75,14 @@ interface DValuation {
   invested_value: number;
 }
 
+interface DHolding {
+  instrument_id: string | null;
+  quantity: number;
+  cost_basis: number;
+  current_value: number;
+  instruments: { name: string; ticker: string | null } | null;
+}
+
 interface DTransaction {
   id: string;
   account_id: string;
@@ -110,6 +119,19 @@ export default function Dashboard() {
         .order("valuation_date", { ascending: true });
       if (error) throw error;
       return data as DValuation[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: holdings = [] } = useQuery({
+    queryKey: ["dash-holdings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("holdings")
+        .select("instrument_id, quantity, cost_basis, current_value, instruments(name, ticker)")
+        .gt("quantity", 0);
+      if (error) throw error;
+      return data as DHolding[];
     },
     enabled: !!user,
   });
@@ -214,8 +236,34 @@ export default function Dashboard() {
       amount: t.total_amount,
     }));
 
-    return { totalValue, netContributions, unrealisedPL, unrealisedPLPercent, totalDividends, totalInterest, isaUsed, portfolioHistory, byProvider, byType, cashFlow, recent };
-  }, [accounts, valuations, transactions, dateRange, isLoading]);
+    // Top performers from holdings
+    const perfMap = new Map<string, { name: string; ticker: string | null; costBasis: number; currentValue: number }>();
+    holdings.forEach(h => {
+      const key = h.instrument_id ?? h.instruments?.name ?? "";
+      if (!key) return;
+      const ex = perfMap.get(key);
+      if (ex) {
+        ex.costBasis += h.cost_basis;
+        ex.currentValue += h.current_value;
+      } else {
+        perfMap.set(key, {
+          name: h.instruments?.name ?? "Unknown",
+          ticker: h.instruments?.ticker ?? null,
+          costBasis: h.cost_basis,
+          currentValue: h.current_value,
+        });
+      }
+    });
+    const performers = Array.from(perfMap.values()).map(p => ({
+      name: p.name,
+      ticker: p.ticker,
+      unrealisedPL: p.currentValue - p.costBasis,
+      unrealisedPLPct: p.costBasis > 0 ? ((p.currentValue - p.costBasis) / p.costBasis) * 100 : 0,
+      currentValue: p.currentValue,
+    }));
+
+    return { totalValue, netContributions, unrealisedPL, unrealisedPLPercent, totalDividends, totalInterest, isaUsed, portfolioHistory, byProvider, byType, cashFlow, recent, performers };
+  }, [accounts, valuations, transactions, holdings, dateRange, isLoading]);
 
   if (isLoading || !computed) return <DashboardSkeleton />;
 
@@ -252,6 +300,10 @@ export default function Dashboard() {
         <CashFlowChart data={computed.cashFlow} />
         <RecentActivity transactions={computed.recent} />
       </div>
+
+      {computed.performers.length > 0 && (
+        <TopPerformers performers={computed.performers} />
+      )}
     </div>
   );
 }

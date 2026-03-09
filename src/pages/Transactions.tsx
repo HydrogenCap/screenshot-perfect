@@ -105,6 +105,19 @@ export default function Transactions() {
   const { data: txResult, isLoading } = useQuery({
     queryKey: ["transactions", page, search, dateFrom, dateTo, selectedAccounts, selectedTypes],
     queryFn: async () => {
+      // Find instrument IDs matching the search term (by name or ticker)
+      let matchingInstrumentIds: string[] = [];
+      if (search) {
+        const term = search.toLowerCase();
+        matchingInstrumentIds = (instruments as { id: string; name: string; ticker: string | null }[])
+          .filter(
+            (i) =>
+              i.name.toLowerCase().includes(term) ||
+              (i.ticker && i.ticker.toLowerCase().includes(term))
+          )
+          .map((i) => i.id);
+      }
+
       let query = supabase
         .from("transactions")
         .select("*, accounts(account_name), instruments(name, ticker)", { count: "exact" })
@@ -115,7 +128,14 @@ export default function Transactions() {
       if (dateTo) query = query.lte("transaction_date", dateTo);
       if (selectedAccounts.length > 0) query = query.in("account_id", selectedAccounts);
       if (selectedTypes.length > 0) query = query.in("type", selectedTypes as unknown as readonly Database["public"]["Enums"]["transaction_type"][]);
-      if (search) query = query.ilike("notes", `%${search}%`);
+      if (search) {
+        const noteFilter = `notes.ilike.%${search}%`;
+        if (matchingInstrumentIds.length > 0) {
+          query = query.or(`${noteFilter},instrument_id.in.(${matchingInstrumentIds.join(",")})`);
+        } else {
+          query = query.ilike("notes", `%${search}%`);
+        }
+      }
 
       const { data, error, count } = await query;
       if (error) throw error;
@@ -199,7 +219,7 @@ export default function Transactions() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search notes..."
+            placeholder="Search instrument, ticker, notes..."
             className="pl-9"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
