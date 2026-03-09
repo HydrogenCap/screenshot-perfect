@@ -61,12 +61,17 @@ export default function Import() {
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const rawText = ev.target?.result as string;
+      let rawText = ev.target?.result as string;
+      // Strip BOM character if present
+      if (rawText.charCodeAt(0) === 0xFEFF) {
+        rawText = rawText.slice(1);
+      }
       const cleanedText = preprocessCSV(rawText);
 
       Papa.parse(cleanedText, {
         header: true,
         skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim(),
         complete: (results) => {
           const rows = results.data as Record<string, string>[];
           if (rows.length === 0) {
@@ -75,7 +80,9 @@ export default function Import() {
           }
 
           const headers = Object.keys(rows[0]);
+          console.log("CSV headers detected:", headers);
           const provider = detectProvider(headers);
+          console.log("Provider detected:", provider);
           setDetectedProvider(provider);
 
           if (provider === "unknown") {
@@ -84,6 +91,7 @@ export default function Import() {
           }
 
           const txns = parseRows(rows, provider);
+          console.log("Parsed transactions:", txns.length, txns.slice(0, 3));
           setParsedTxns(txns);
           setStep("preview");
           toast.success(`Detected ${providerLabel(provider)} — ${txns.length} transactions parsed`);
