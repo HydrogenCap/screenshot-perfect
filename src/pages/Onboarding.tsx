@@ -551,9 +551,13 @@ export default function Onboarding() {
                 </button>
               )}
               {step === 3 && (
-                <span className="text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:underline"
+                  onClick={() => setStep(4)}
+                >
                   I'll do this later
-                </span>
+                </button>
               )}
               {step === 4 && (
                 <button
