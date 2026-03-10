@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, BarChart3 } from "lucide-react";
+import { Plus, Search, BarChart3, Settings } from "lucide-react";
 import { accountTypeLabels } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AccountCard } from "@/components/accounts/AccountCard";
 import { AccountSparkline } from "@/components/accounts/AccountSparkline";
 import { ProviderLogo } from "@/components/ProviderLogo";
+import { ProviderSettingsDialog } from "@/components/accounts/ProviderSettingsDialog";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 const accountTypes = Constants.public.Enums.account_type;
@@ -59,6 +60,7 @@ export default function Accounts() {
   const [valEditId, setValEditId] = useState<string | null>(null);
   const [valCash, setValCash] = useState("");
   const [valInvested, setValInvested] = useState("");
+  const [settingsProvider, setSettingsProvider] = useState<any>(null);
 
   // Fetch accounts with provider + latest valuation
   const { data: accounts = [], isLoading } = useQuery({
@@ -312,13 +314,24 @@ export default function Accounts() {
                   return (
                     <tr
                       key={account.id}
-                      className="border-b last:border-0 transition-colors hover:bg-muted/30 animate-fade-in"
+                      className="border-b last:border-0 transition-colors hover:bg-muted/30 animate-fade-in group"
                       style={{ animationDelay: `${i * 50}ms` }}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <ProviderLogo name={account.providers?.name || "?"} logoUrl={account.providers?.logo_url} size="xs" />
                           <span className="font-medium">{account.providers?.name}</span>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-muted-foreground"
+                            title="Provider API settings"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const p = providers.find((p: any) => p.id === account.provider_id);
+                              if (p) setSettingsProvider(p);
+                            }}
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </td>
                       <td className="px-4 py-3">{account.account_name}</td>
@@ -428,6 +441,15 @@ export default function Accounts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Provider API Settings Dialog */}
+      {settingsProvider && (
+        <ProviderSettingsDialog
+          open={!!settingsProvider}
+          onOpenChange={(open) => { if (!open) setSettingsProvider(null); }}
+          provider={settingsProvider}
+        />
+      )}
 
       {/* Add Valuation Dialog */}
       <Dialog open={valDialogOpen} onOpenChange={setValDialogOpen}>
