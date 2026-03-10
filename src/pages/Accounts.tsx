@@ -66,7 +66,7 @@ export default function Accounts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("accounts")
-        .select("*, providers(name)")
+        .select("*, providers(name, logo_url)")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -317,7 +317,7 @@ export default function Accounts() {
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <ProviderLogo name={account.providers?.name || "?"} logoUrl={(account.providers as any)?.logo_url} size="xs" />
+                          <ProviderLogo name={account.providers?.name || "?"} logoUrl={account.providers?.logo_url} size="xs" />
                           <span className="font-medium">{account.providers?.name}</span>
                         </div>
                       </td>
