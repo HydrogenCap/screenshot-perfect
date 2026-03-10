@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { TrendingUp, PiggyBank, BarChart3, Coins } from "lucide-react";
+import { TrendingUp, PiggyBank, BarChart3, Coins, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { usePortfolioHoldings, useRefreshPrices } from "@/hooks/usePortfolioHoldings";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
@@ -12,9 +13,12 @@ import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { IsaAllowanceCard } from "@/components/dashboard/IsaAllowanceCard";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)", "hsl(142, 71%, 45%)", "hsl(262, 83%, 58%)",
@@ -89,6 +93,9 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState("all");
 
+  const { data: holdings = [], isLoading: lh } = usePortfolioHoldings();
+  const refreshPrices = useRefreshPrices();
+
   const { data: accounts = [], isLoading: la } = useQuery({
     queryKey: ["dash-accounts"],
     queryFn: async () => {
@@ -127,14 +134,45 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  const isLoading = la || lv || lt;
+  const isLoading = la || lv || lt || lh;
+
+  // Holdings-based valuations
+  const holdingsTotal = useMemo(() => {
+    const totalMarketValue = holdings.reduce((s, h) => s + h.market_value, 0);
+    const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0);
+    const totalGainLoss = totalMarketValue - totalCost;
+    const totalGainLossPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
+    const holdingsCount = holdings.length;
+    const hasPrices = holdings.some(h => h.current_price != null);
+    return { totalMarketValue, totalCost, totalGainLoss, totalGainLossPct, holdingsCount, hasPrices };
+  }, [holdings]);
+
+  const handleRefreshPrices = () => {
+    const tickers = holdings
+      .map(h => h.ticker)
+      .filter((t): t is string => !!t);
+    const unique = [...new Set(tickers)];
+    if (unique.length === 0) {
+      toast.info("No tickers to refresh");
+      return;
+    }
+    refreshPrices.mutate(unique, {
+      onSuccess: (data) => {
+        toast.success(`Prices updated for ${data.updated} instruments`);
+        if (data.errors.length > 0) {
+          toast.warning(`${data.errors.length} ticker(s) failed to fetch`);
+        }
+      },
+      onError: (err: any) => toast.error(err.message || "Failed to refresh prices"),
+    });
+  };
 
   const computed = useMemo(() => {
     if (isLoading) return null;
     const startDate = getStartDate(dateRange);
     const activeIds = accounts.filter(a => a.is_active).map(a => a.id);
 
-    // Latest valuation per account
+    // Use holdings-based total if available, otherwise fall back to valuations
     const latestMap = new Map<string, DValuation>();
     valuations.forEach(v => {
       if (!activeIds.includes(v.account_id)) return;
@@ -142,13 +180,14 @@ export default function Dashboard() {
       if (!ex || v.valuation_date > ex.valuation_date) latestMap.set(v.account_id, v);
     });
     const latestVals = Array.from(latestMap.values());
-    const totalValue = latestVals.reduce((s, v) => s + v.total_value, 0);
+    const valuationTotal = latestVals.reduce((s, v) => s + v.total_value, 0);
+    const totalValue = holdingsTotal.hasPrices ? holdingsTotal.totalMarketValue : valuationTotal;
 
     const deposits = transactions.filter(t => ["deposit", "contribution", "transfer_in"].includes(t.type)).reduce((s, t) => s + t.total_amount, 0);
     const withdrawals = transactions.filter(t => ["withdrawal", "transfer_out"].includes(t.type)).reduce((s, t) => s + t.total_amount, 0);
     const netContributions = deposits - withdrawals;
-    const unrealisedPL = totalValue - netContributions;
-    const unrealisedPLPercent = netContributions > 0 ? (unrealisedPL / netContributions) * 100 : 0;
+    const unrealisedPL = holdingsTotal.hasPrices ? holdingsTotal.totalGainLoss : (totalValue - netContributions);
+    const unrealisedPLPercent = holdingsTotal.hasPrices ? holdingsTotal.totalGainLossPct : (netContributions > 0 ? (unrealisedPL / netContributions) * 100 : 0);
     const totalDividends = transactions.filter(t => t.type === "dividend").reduce((s, t) => s + t.total_amount, 0);
     const totalInterest = transactions.filter(t => t.type === "interest").reduce((s, t) => s + t.total_amount, 0);
 
@@ -215,9 +254,12 @@ export default function Dashboard() {
     }));
 
     return { totalValue, netContributions, unrealisedPL, unrealisedPLPercent, totalDividends, totalInterest, isaUsed, portfolioHistory, byProvider, byType, cashFlow, recent };
-  }, [accounts, valuations, transactions, dateRange, isLoading]);
+  }, [accounts, valuations, transactions, dateRange, isLoading, holdingsTotal]);
 
   if (isLoading || !computed) return <DashboardSkeleton />;
+
+  // Sort holdings by market value desc for the table
+  const sortedHoldings = [...holdings].sort((a, b) => b.market_value - a.market_value);
 
   return (
     <div className="space-y-6">
@@ -226,22 +268,103 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Your portfolio at a glance</p>
         </div>
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {DATE_RANGE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshPrices}
+            disabled={refreshPrices.isPending || holdings.length === 0}
+          >
+            <RefreshCw className={cn("mr-2 h-3.5 w-3.5", refreshPrices.isPending && "animate-spin")} />
+            {refreshPrices.isPending ? "Refreshing…" : "Refresh Prices"}
+          </Button>
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DATE_RANGE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Portfolio" value={formatCurrency(computed.totalValue)} icon={<TrendingUp className="h-4 w-4" />} delay={0} />
-        <StatCard label="Net Contributions" value={formatCurrency(computed.netContributions)} icon={<PiggyBank className="h-4 w-4" />} delay={50} />
-        <StatCard label="Unrealised P&L" value={computed.totalValue === 0 && computed.netContributions > 0 ? "N/A" : formatCurrency(computed.unrealisedPL, "GBP", { showSign: true })} change={computed.totalValue === 0 && computed.netContributions > 0 ? "No valuation data" : formatPercent(computed.unrealisedPLPercent)} changeType={computed.totalValue === 0 && computed.netContributions > 0 ? "neutral" : computed.unrealisedPL >= 0 ? "gain" : "loss"} icon={<BarChart3 className="h-4 w-4" />} delay={100} />
-        <StatCard label="Dividends & Interest" value={formatCurrency(computed.totalDividends + computed.totalInterest)} change={`${formatCurrency(computed.totalDividends)} dividends`} changeType="neutral" icon={<Coins className="h-4 w-4" />} delay={150} />
+        <StatCard
+          label={holdingsTotal.hasPrices ? "Total Cost Basis" : "Net Contributions"}
+          value={formatCurrency(holdingsTotal.hasPrices ? holdingsTotal.totalCost : computed.netContributions)}
+          icon={<PiggyBank className="h-4 w-4" />}
+          delay={50}
+        />
+        <StatCard
+          label="Unrealised P&L"
+          value={computed.totalValue === 0 && computed.netContributions > 0 ? "N/A" : formatCurrency(computed.unrealisedPL, "GBP", { showSign: true })}
+          change={computed.totalValue === 0 && computed.netContributions > 0 ? "No valuation data" : formatPercent(computed.unrealisedPLPercent)}
+          changeType={computed.totalValue === 0 && computed.netContributions > 0 ? "neutral" : computed.unrealisedPL >= 0 ? "gain" : "loss"}
+          icon={<BarChart3 className="h-4 w-4" />}
+          delay={100}
+        />
+        <StatCard
+          label={holdingsTotal.hasPrices ? "Active Positions" : "Dividends & Interest"}
+          value={holdingsTotal.hasPrices ? String(holdingsTotal.holdingsCount) : formatCurrency(computed.totalDividends + computed.totalInterest)}
+          change={holdingsTotal.hasPrices ? `${formatCurrency(computed.totalDividends)} dividends` : `${formatCurrency(computed.totalDividends)} dividends`}
+          changeType="neutral"
+          icon={<Coins className="h-4 w-4" />}
+          delay={150}
+        />
       </div>
 
       <IsaAllowanceCard used={computed.isaUsed} limit={20000} taxYearLabel={getCurrentTaxYearLabel()} />
+
+      {/* Holdings breakdown table */}
+      {sortedHoldings.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b bg-muted/40 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Holdings Breakdown</h3>
+            <span className="text-xs text-muted-foreground">{sortedHoldings.length} positions</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/20">
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Instrument</th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Ticker</th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Account</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Qty</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Avg Cost</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Price</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Value</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Gain/Loss</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedHoldings.map((h, i) => (
+                  <tr key={`${h.instrument_id}-${h.account_id}`} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="px-4 py-2 font-medium truncate max-w-[200px]">{h.instrument_name || "—"}</td>
+                    <td className="px-4 py-2 font-mono text-muted-foreground text-xs">{h.ticker || "—"}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">{h.account_name}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">{h.net_quantity.toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">{formatCurrency(h.avg_cost)}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">
+                      {h.current_price != null ? formatCurrency(h.current_price) : <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums font-medium">
+                      {h.current_price != null ? formatCurrency(h.market_value) : <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
+                    <td className={cn("px-4 py-2 text-right font-mono tabular-nums", h.gain_loss > 0 ? "text-gain" : h.gain_loss < 0 ? "text-loss" : "text-muted-foreground")}>
+                      {h.current_price != null ? (
+                        <div>
+                          <div>{formatCurrency(h.gain_loss, "GBP", { showSign: true })}</div>
+                          <div className="text-[10px]">{formatPercent(h.gain_loss_pct)}</div>
+                        </div>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <PortfolioChart data={computed.portfolioHistory} />

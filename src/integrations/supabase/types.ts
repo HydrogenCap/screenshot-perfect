@@ -202,11 +202,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "holdings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "holdings_instrument_id_fkey"
             columns: ["instrument_id"]
             isOneToOne: false
             referencedRelation: "instruments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holdings_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["instrument_id"]
           },
         ]
       }
@@ -268,6 +282,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "imports_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "imports_mapping_used_fkey"
             columns: ["mapping_used"]
             isOneToOne: false
@@ -275,6 +296,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      instrument_prices: {
+        Row: {
+          as_of: string | null
+          currency: string | null
+          fx_rate: number | null
+          id: string
+          instrument_name: string | null
+          isin: string | null
+          price_gbp: number
+          price_native: number | null
+          source: string | null
+          ticker: string
+          updated_at: string | null
+        }
+        Insert: {
+          as_of?: string | null
+          currency?: string | null
+          fx_rate?: number | null
+          id?: string
+          instrument_name?: string | null
+          isin?: string | null
+          price_gbp?: number
+          price_native?: number | null
+          source?: string | null
+          ticker: string
+          updated_at?: string | null
+        }
+        Update: {
+          as_of?: string | null
+          currency?: string | null
+          fx_rate?: number | null
+          id?: string
+          instrument_name?: string | null
+          isin?: string | null
+          price_gbp?: number
+          price_native?: number | null
+          source?: string | null
+          ticker?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       instruments: {
         Row: {
@@ -320,6 +383,54 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      manual_valuations: {
+        Row: {
+          account_id: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          ticker: string | null
+          user_id: string
+          valuation_date: string
+          valuation_gbp: number
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          ticker?: string | null
+          user_id: string
+          valuation_date?: string
+          valuation_gbp: number
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          ticker?: string | null
+          user_id?: string
+          valuation_date?: string
+          valuation_gbp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_valuations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_valuations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["account_id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -463,6 +574,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "transactions_import_id_fkey"
             columns: ["import_id"]
             isOneToOne: false
@@ -475,6 +593,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instruments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["instrument_id"]
           },
         ]
       }
@@ -556,11 +681,34 @@ export type Database = {
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "valuations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_holdings"
+            referencedColumns: ["account_id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      portfolio_holdings: {
+        Row: {
+          account_id: string | null
+          account_name: string | null
+          account_type: Database["public"]["Enums"]["account_type"] | null
+          avg_cost: number | null
+          instrument_id: string | null
+          instrument_name: string | null
+          isin: string | null
+          last_trade_date: string | null
+          net_quantity: number | null
+          ticker: string | null
+          total_cost: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
